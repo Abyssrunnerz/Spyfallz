@@ -1,10 +1,10 @@
 /* Spyfall — ไคลเอนต์ Telegram Mini App
  *
- * ▼▼▼ แก้บรรทัดเดียวนี้ถ้าย้ายแบ็กเอนด์ ▼▼▼
+ * แก้บรรทัดเดียวนี้ถ้าย้ายแบ็กเอนด์
  * URL ของ Cloudflare Worker (ลงท้ายด้วย /)
  */
 var API = 'https://spyfall-api.j4ck-manop.workers.dev/';
-/* ▲▲▲ ไม่ต้องแก้อะไรใต้บรรทัดนี้ ▲▲▲ */
+/* ไม่ต้องแก้อะไรใต้บรรทัดนี้ */
 
 (function () {
 'use strict';
@@ -501,15 +501,18 @@ function renderResult(v) {
   backButton(null);
   var res = v.result;
   var spy = nameOf(res.spyId);
+  // ฝั่งไหนชนะ ใช้บอกสีและสัญลักษณ์ ไม่ใช้ emoji
   var t = {
-    spy_caught:       ['🎉', 'ผู้เล่นชนะ!', 'จับสายลับได้ — ' + spy + ' คือสายลับ · สถานที่คือ ' + res.location],
-    wrong_accusation: ['🕵️', 'สายลับชนะ!', 'โหวตผิดคน ' + nameOf(res.targetId) + ' ไม่ใช่สายลับ — สายลับคือ ' + spy],
-    spy_guessed:      ['🕵️', 'สายลับชนะ!', spy + ' เดาถูก: ' + res.location],
-    spy_wrong_guess:  ['🎉', 'ผู้เล่นชนะ!', spy + ' เดาผิด (ทาย ' + res.guess + ') — ที่จริงคือ ' + res.location],
-    spy_survived:     ['⏳', 'สายลับรอด!', 'หมดเวลา — สายลับคือ ' + spy + ' · สถานที่คือ ' + res.location]
-  }[res.type] || ['❓', 'จบรอบ', ''];
+    spy_caught:       ['players', 'ผู้เล่นชนะ', 'จับสายลับได้ — ' + spy + ' คือสายลับ · สถานที่คือ ' + res.location],
+    wrong_accusation: ['spy', 'สายลับชนะ', 'โหวตผิดคน ' + nameOf(res.targetId) + ' ไม่ใช่สายลับ — สายลับคือ ' + spy],
+    spy_guessed:      ['spy', 'สายลับชนะ', spy + ' เดาถูก: ' + res.location],
+    spy_wrong_guess:  ['players', 'ผู้เล่นชนะ', spy + ' เดาผิด (ทาย ' + res.guess + ') — ที่จริงคือ ' + res.location],
+    spy_survived:     ['spy', 'สายลับรอด', 'หมดเวลา — สายลับคือ ' + spy + ' · สถานที่คือ ' + res.location]
+  }[res.type] || ['none', 'จบรอบ', ''];
 
-  $('result-emoji').textContent = t[0];
+  var badge = $('result-emoji');
+  badge.className = 'verdict-badge ' + t[0];
+  badge.textContent = t[0] === 'players' ? '✓' : t[0] === 'spy' ? '✕' : '–';
   $('result-title').textContent = t[1];
   $('result-sub').textContent = t[2];
 

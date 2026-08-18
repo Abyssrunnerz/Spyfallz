@@ -44,11 +44,18 @@ body {
 .tg .fallback-actions { display: none; }
 
 /* ---------- หัวเรื่อง ---------- */
-.brand { text-align: center; padding: 26px 0 22px; }
-.brand-mark { font-size: 52px; line-height: 1; }
-.wordmark { font-size: 40px; font-weight: 800; letter-spacing: 4px; margin: 8px 0 4px; }
+.brand { text-align: center; padding: 30px 0 24px; }
+.brand-mark { width: 60px; height: 60px; }
+.brand-mark .ring-outer { fill: none; stroke: var(--line); stroke-width: 2; }
+.brand-mark .ring-mid   { fill: none; stroke: var(--red); stroke-width: 3; }
+.brand-mark .dot        { fill: var(--red); }
+.brand-mark .ticks      { stroke: var(--muted); stroke-width: 2.5; stroke-linecap: round; }
+.wordmark {
+  font-size: 38px; font-weight: 800; letter-spacing: 7px;
+  margin: 14px 0 6px; text-indent: 7px;
+}
 .wordmark span { color: var(--red); }
-.tagline { color: var(--muted); font-size: 14px; margin: 0; }
+.tagline { color: var(--muted); font-size: 13.5px; margin: 0; letter-spacing: .2px; }
 
 .hint { color: var(--muted); font-size: 13px; text-align: center; margin: 12px 0 0; }
 .hint.left { text-align: left; margin-top: 12px; }
@@ -189,10 +196,17 @@ body {
 .vote-text { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
 
 /* ---------- ผลรอบ ---------- */
-.verdict { text-align: center; padding: 24px 0 18px; }
-.verdict-emoji { font-size: 56px; line-height: 1; }
-.verdict-title { font-size: 30px; font-weight: 800; margin: 8px 0 6px; }
-.verdict-sub { color: var(--dim); font-size: 14px; margin: 0; }
+.verdict { text-align: center; padding: 26px 0 20px; }
+.verdict-badge {
+  width: 72px; height: 72px; margin: 0 auto; border-radius: 9999px;
+  display: grid; place-items: center;
+  font-size: 34px; font-weight: 700; line-height: 1;
+  border: 2px solid var(--line); color: var(--muted);
+}
+.verdict-badge.players { border-color: var(--green); color: var(--green); background: rgba(52, 211, 153, .1); }
+.verdict-badge.spy     { border-color: var(--red);   color: var(--red);   background: var(--red-bg); }
+.verdict-title { font-size: 29px; font-weight: 800; margin: 16px 0 6px; letter-spacing: -.3px; }
+.verdict-sub { color: var(--dim); font-size: 14px; margin: 0; max-width: 34ch; margin-inline: auto; }
 
 /* ---------- แผงเดาสถานที่ ---------- */
 .sheet { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, .78); z-index: 20; }
@@ -252,3 +266,53 @@ body.busy .btn, body.busy .pbtn, body.busy .loc { pointer-events: none; opacity:
 /* รูปประจำตัวที่แสดงในรายชื่อและตะแกรงผู้เล่น */
 .av img { width: 100%; height: 100%; border-radius: 9999px; display: block; }
 .av.pic { background: none !important; }
+
+/* ---------- ปรับรายละเอียดให้เรียบร้อยขึ้น ---------- */
+
+/* เส้นบางบนสุดคั่นเนื้อหาออกจากแถบของ Telegram */
+body::before {
+  content: ''; position: fixed; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--red), transparent);
+  opacity: .5; z-index: 1; pointer-events: none;
+}
+
+/* หัวข้อการ์ดมีขีดนำหน้า อ่านเป็นลำดับชั้นได้ชัดกว่าตัวหนังสือเปล่า */
+.card-title { display: flex; align-items: center; gap: 8px; }
+.card-title::before {
+  content: ''; width: 12px; height: 2px; border-radius: 2px;
+  background: var(--red); flex: 0 0 12px;
+}
+
+/* รหัสห้องเป็นพระเอกของล็อบบี้ ให้พื้นที่หายใจและมีมิติ */
+.code-panel { position: relative; overflow: hidden; }
+.code-panel::after {
+  content: ''; position: absolute; inset: auto -40% -70% -40%; height: 120%;
+  background: radial-gradient(50% 50% at 50% 0%, rgba(239, 68, 68, .13), transparent 70%);
+  pointer-events: none;
+}
+.code-value { font-variant-numeric: tabular-nums; }
+
+/* การ์ดลับ: เพิ่มกรอบในให้ดูเป็นเอกสารลับ */
+.secret { position: relative; }
+.secret::after {
+  content: ''; position: absolute; inset: 7px; border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .07); pointer-events: none;
+}
+.secret-main { letter-spacing: -.4px; }
+
+/* นาฬิกา: ตัวเลขเด่นขึ้นและแถบบางลงให้ดูประณีต */
+.clock-value { font-feature-settings: 'tnum' 1; }
+.bar { height: 3px; }
+
+/* ปุ่มหลักมีน้ำหนักมากขึ้นเล็กน้อยเวลากด */
+.btn-primary { box-shadow: 0 1px 0 rgba(255, 255, 255, .12) inset; }
+.btn:focus-visible, .loc:focus-visible, .pbtn:focus-visible, .av-opt:focus-visible {
+  outline: 2px solid var(--red-lt); outline-offset: 2px;
+}
+
+/* รายชื่อผู้เล่น: แถวสูงขึ้นนิด อ่านง่ายขึ้นบนมือถือ */
+.list li { padding: 10px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

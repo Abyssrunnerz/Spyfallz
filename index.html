@@ -4,19 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Spyfall</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🕵️</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23111827'/><circle cx='16' cy='16' r='9' fill='none' stroke='%23ef4444' stroke-width='2.5'/><circle cx='16' cy='16' r='3' fill='%23ef4444'/></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=9">
+<link rel="stylesheet" href="./style.css?v=10">
 </head>
 <body>
 
 <!-- ---------- หน้าแรก ---------- -->
 <section id="screen-home" class="screen">
   <header class="brand">
-    <div class="brand-mark">🕵️</div>
+    <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="27" class="ring-outer"/>
+      <circle cx="32" cy="32" r="18" class="ring-mid"/>
+      <circle cx="32" cy="32" r="6" class="dot"/>
+      <path d="M32 1v10M32 53v10M1 32h10M53 32h10" class="ticks"/>
+    </svg>
     <h1 class="wordmark">SPY<span>FALL</span></h1>
     <p class="tagline">ทุกคนรู้ว่าอยู่ที่ไหน ยกเว้นสายลับหนึ่งคน</p>
   </header>
@@ -137,7 +142,7 @@
 <!-- ---------- ผลรอบ ---------- -->
 <section id="screen-result" class="screen">
   <div class="verdict">
-    <div id="result-emoji" class="verdict-emoji">🎉</div>
+    <div id="result-emoji" class="verdict-badge"></div>
     <h2 id="result-title" class="verdict-title">—</h2>
     <p id="result-sub" class="verdict-sub"></p>
   </div>
@@ -166,6 +171,6 @@
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=9"></script>
+<script src="./app.js?v=10"></script>
 </body>
 </html>
