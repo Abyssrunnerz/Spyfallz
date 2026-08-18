@@ -92,6 +92,15 @@ function api(action, payload) {
   var p = payload || {};
   if (ME) { p.uid = ME.uid; p.name = ME.name; p.sig = ME.sig; }
   var url = API + '?api=' + encodeURIComponent(action) + '&p=' + encodeURIComponent(JSON.stringify(p));
+  return fetchOnce(url).catch(function () {
+    // Apps Script ตอบ 404/302 ให้ 1-2 คำขอแรกหลังพักไปนาน (cold start) แล้วค่อยนิ่ง
+    // ลองซ้ำครั้งเดียวเมื่อพลาดระดับ transport เท่านั้น — ระดับนี้แปลว่าโค้ดเรายังไม่ทันได้ทำงาน
+    // ถ้าเซิร์ฟเวอร์ตอบ ok:false มาแล้ว จะไม่ลองซ้ำ เพราะนั่นคือคำตอบจริง
+    return new Promise(function (r) { setTimeout(r, 700); }).then(function () { return fetchOnce(url); });
+  });
+}
+
+function fetchOnce(url) {
   return fetch(url).then(function (r) {
     if (!r.ok) throw new Error('เชื่อมต่อไม่ได้ (' + r.status + ')');
     return r.json();
