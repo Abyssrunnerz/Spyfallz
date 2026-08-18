@@ -3,7 +3,7 @@
  * ▼▼▼ แก้บรรทัดเดียวนี้ก่อนใช้งาน ▼▼▼
  * วาง URL ของ Apps Script deployment (ลงท้ายด้วย /exec) ลงไป
  */
-var API = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';
+var API = 'https://script.google.com/macros/s/AKfycbxIvDBX0TI5KIiHizw4tSt7WyccNpu16zQH_sHuvJpXteF8kNgE-SJHV8mjdV3u-Coj/exec';
 /* ▲▲▲ ไม่ต้องแก้อะไรใต้บรรทัดนี้ ▲▲▲ */
 
 (function () {
