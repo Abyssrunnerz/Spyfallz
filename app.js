@@ -28,7 +28,8 @@ var wsRetry = null;    // ตัวจับเวลาต่อใหม่
 var wsTries = 0;       // ต่อไม่ติดมากี่ครั้งแล้ว ใช้ถ่วงเวลาแบบทวีคูณ
 var MY_AV = 0;         // รูปประจำตัวที่เลือกไว้ 0 = ใช้วงกลมตัวอักษร
 var AVATARS = 27;      // จำนวนรูปใน web/av/
-var warnedRound = -1;  // เตือนเสียงไปแล้วในรอบไหน
+var warnedRound = -1;  // เตือนเสียงนาทีสุดท้ายไปแล้วในรอบไหน
+var soundedRound = -1; // เล่นเสียงผลรอบไปแล้วในรอบไหน
 
 var $ = function (id) { return document.getElementById(id); };
 
@@ -250,6 +251,23 @@ function lastMinuteWarning() {
   beep(880, 150, 0);
   beep(660, 240, 0.2);
   try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) {}
+}
+
+/** ชนะ — ไล่เสียงขึ้น */
+function winSound() {
+  beep(523, 130, 0);
+  beep(659, 130, 0.12);
+  beep(784, 150, 0.24);
+  beep(1047, 300, 0.38);
+  try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) {}
+}
+
+/** แพ้ — ไล่เสียงลง เบากว่าและยาวกว่า */
+function loseSound() {
+  beep(392, 190, 0);
+  beep(311, 210, 0.17);
+  beep(233, 420, 0.36);
+  try { tg.HapticFeedback.notificationOccurred('error'); } catch (e) {}
 }
 
 /* ---------- รับสถานะแบบ push ----------
@@ -538,6 +556,15 @@ function renderResult(v) {
     li.appendChild(pts);
     ul.appendChild(li);
   });
+
+  // เสียงแพ้ชนะ ครั้งเดียวต่อรอบ และตัดสินจากมุมของผู้เล่นคนนี้เอง
+  // สายลับที่รอดต้องได้ยินเสียงชนะ ทั้งที่ "ผู้เล่น" แพ้
+  if (soundedRound !== v.roundNo) {
+    soundedRound = v.roundNo;
+    var spyWon = (res.type !== 'spy_caught' && res.type !== 'spy_wrong_guess');
+    var iAmSpy = (res.spyId === v.you);
+    if (spyWon === iAmSpy) winSound(); else loseSound();
+  }
 
   var isHost = (v.you === v.hostId);
   var label = 'เริ่มรอบที่ ' + (v.roundNo + 1);
