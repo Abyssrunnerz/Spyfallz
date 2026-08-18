@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Spyfall</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🕵️</text></svg>">
+<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+<link rel="stylesheet" href="./style.css?v=1">
+</head>
+<body>
+
+<!-- ---------- หน้าแรก ---------- -->
+<section id="screen-home" class="screen">
+  <header class="brand">
+    <div class="brand-mark">🕵️</div>
+    <h1 class="wordmark">SPY<span>FALL</span></h1>
+    <p class="tagline">ทุกคนรู้ว่าอยู่ที่ไหน ยกเว้นสายลับหนึ่งคน</p>
+  </header>
+
+  <label class="field">
+    <span>ชื่อของคุณ</span>
+    <input id="input-name" type="text" maxlength="24" placeholder="ใส่ชื่อ" autocomplete="off">
+  </label>
+
+  <label class="field">
+    <span>รหัสห้อง <em>เว้นว่างไว้ถ้าจะสร้างห้องใหม่</em></span>
+    <input id="input-code" type="text" maxlength="4" placeholder="ABCD"
+           inputmode="latin" autocomplete="off" autocapitalize="characters" class="code-input">
+  </label>
+
+  <div id="home-actions" class="fallback-actions">
+    <button id="btn-create" class="btn btn-primary">สร้างห้องใหม่</button>
+    <button id="btn-join" class="btn btn-outline">เข้าร่วมห้อง</button>
+  </div>
+
+  <div class="card rules">
+    <div class="card-title">เล่นยังไง</div>
+    <ol class="steps">
+      <li><b>3–12 คน</b> ทุกคนได้สถานที่และบทบาทเหมือนกัน ยกเว้นสายลับ 1 คนที่ไม่รู้อะไรเลย</li>
+      <li><b>ผลัดกันถาม</b> คำถามที่พิสูจน์ว่าอีกฝ่ายรู้จักสถานที่ แต่ไม่เฉลยให้สายลับ</li>
+      <li><b>กล่าวหา</b> ได้คนละ 1 ครั้งต่อรอบ ถ้าโหวตผ่านและจับถูกตัว ผู้เล่นชนะ</li>
+      <li><b>สายลับ</b> ชนะถ้าเดาสถานที่ถูก หรือรอดจนหมดเวลา</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ---------- ล็อบบี้ ---------- -->
+<section id="screen-lobby" class="screen">
+  <div class="code-panel">
+    <div class="code-label">รหัสห้อง</div>
+    <div id="lobby-code" class="code-value">----</div>
+    <button id="btn-share" class="btn btn-outline btn-sm">ชวนเพื่อน</button>
+  </div>
+
+  <div id="lobby-notice" class="notice"></div>
+
+  <div class="card">
+    <div class="card-title">เวลาต่อรอบ</div>
+    <div id="minutes-row" class="chips"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ผู้เล่น <span id="lobby-count" class="badge"></span></div>
+    <ul id="lobby-players" class="list"></ul>
+  </div>
+
+  <p id="lobby-wait" class="hint"></p>
+  <div id="lobby-actions" class="fallback-actions">
+    <button id="btn-start" class="btn btn-primary">เริ่มเกม</button>
+  </div>
+  <button id="btn-leave" class="btn btn-ghost">ออกจากห้อง</button>
+</section>
+
+<!-- ---------- กำลังเล่น ---------- -->
+<section id="screen-game" class="screen">
+  <div class="clock">
+    <div id="timer" class="clock-value">--:--</div>
+    <div class="bar"><div id="timer-bar" class="bar-fill"></div></div>
+  </div>
+
+  <div id="secret" class="secret">
+    <div class="secret-label">การ์ดของคุณ</div>
+    <div id="secret-main" class="secret-main">—</div>
+    <div id="secret-role" class="secret-role"></div>
+  </div>
+
+  <p id="first-asker" class="hint"></p>
+  <div id="game-notice" class="notice"></div>
+
+  <div class="card">
+    <div class="card-title">กล่าวหาผู้เล่น</div>
+    <div id="game-players" class="grid"></div>
+    <p id="accuse-hint" class="hint left"></p>
+  </div>
+
+  <div id="game-actions" class="fallback-actions">
+    <button id="btn-open-guess" class="btn btn-primary">เปิดตัว &amp; เดาสถานที่</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">สถานที่ทั้งหมด <span class="badge">แตะเพื่อขีดฆ่า</span></div>
+    <div id="loc-list" class="locs"></div>
+  </div>
+
+  <button id="btn-leave-game" class="btn btn-ghost">ออกจากห้อง</button>
+</section>
+
+<!-- ---------- โหวต ---------- -->
+<section id="screen-vote" class="screen">
+  <div class="clock">
+    <div id="vote-timer" class="clock-value sm">--</div>
+    <div class="bar"><div id="vote-bar" class="bar-fill"></div></div>
+  </div>
+
+  <div class="card vote-card">
+    <div id="vote-avs" class="vote-avs"></div>
+    <div id="vote-text" class="vote-text"></div>
+    <div id="vote-progress" class="badge"></div>
+  </div>
+
+  <div id="vote-actions" class="fallback-actions">
+    <button id="btn-vote-yes" class="btn btn-primary">ใช่ เขาคือสายลับ</button>
+  </div>
+  <button id="btn-vote-no" class="btn btn-outline">ไม่ใช่</button>
+  <p id="vote-waiting" class="hint"></p>
+</section>
+
+<!-- ---------- ผลรอบ ---------- -->
+<section id="screen-result" class="screen">
+  <div class="verdict">
+    <div id="result-emoji" class="verdict-emoji">🎉</div>
+    <h2 id="result-title" class="verdict-title">—</h2>
+    <p id="result-sub" class="verdict-sub"></p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">คะแนนรวม</div>
+    <ul id="result-scores" class="list"></ul>
+  </div>
+
+  <p id="result-wait" class="hint"></p>
+  <div id="result-actions" class="fallback-actions">
+    <button id="btn-next" class="btn btn-primary">รอบต่อไป</button>
+  </div>
+  <button id="btn-leave-result" class="btn btn-ghost">ออกจากห้อง</button>
+</section>
+
+<!-- ---------- แผงให้สายลับเลือกเดา ---------- -->
+<div id="guess-sheet" class="sheet">
+  <div class="sheet-inner">
+    <div class="sheet-title">เดาสถานที่ — ถูก = ชนะทันที · ผิด = แพ้ทันที</div>
+    <div id="guess-list" class="locs"></div>
+    <button id="btn-guess-cancel" class="btn btn-ghost">ยกเลิก</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="./app.js?v=1"></script>
+</body>
+</html>
