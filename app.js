@@ -25,6 +25,9 @@ var lastKey = '';   // ลายเซ็นของสิ่งที่วา
 var polling = null;
 var SOCK = null;       // WebSocket ที่ใช้อยู่
 var wsRetry = null;    // ตัวจับเวลาต่อใหม่
+var MY_AV = 0;         // รูปประจำตัวที่เลือกไว้ 0 = ใช้วงกลมตัวอักษร
+var AVATARS = 27;      // จำนวนรูปใน web/av/
+var warnedRound = -1;  // เตือนเสียงไปแล้วในรอบไหน
 
 var $ = function (id) { return document.getElementById(id); };
 
@@ -91,7 +94,7 @@ function backButton(action) {
  */
 function api(action, payload) {
   var p = payload || {};
-  if (ME) { p.uid = ME.uid; p.name = ME.name; p.sig = ME.sig; }
+  if (ME) { p.uid = ME.uid; p.name = ME.name; p.sig = ME.sig; p.av = MY_AV; }
   var url = API + '?api=' + encodeURIComponent(action) + '&p=' + encodeURIComponent(JSON.stringify(p));
   return fetchOnce(url).catch(function () {
     // ลองซ้ำครั้งเดียวเมื่อพลาดระดับ transport เท่านั้น (เน็ตสะดุด/คำขอแรกหลัง deploy)
@@ -166,18 +169,84 @@ function tagEl(text, cls) {
   return s;
 }
 
-/** วงกลมสีประจำตัว สีมาจากชื่อ ผู้เล่นคนเดิมได้สีเดิมเสมอ */
+/** วงกลมประจำตัว — ใช้รูปที่เลือกไว้ ถ้าไม่ได้เลือกก็ใช้ตัวอักษรแรกบนสีที่มาจากชื่อ
+ *  (ผู้เล่นคนเดิมได้สีเดิมเสมอ) */
 var AV_HUES = [0, 28, 45, 155, 190, 265, 320];
-function avEl(name, big) {
+function avEl(name, big, av) {
+  var d = document.createElement('div');
+  d.className = 'av' + (big ? ' lg' : '');
+  if (av) {
+    d.className += ' pic';
+    var img = document.createElement('img');
+    img.src = avSrc(av);
+    img.alt = '';
+    d.appendChild(img);
+    return d;
+  }
   var h = 0;
   for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 997;
   var hue = AV_HUES[h % AV_HUES.length];
-  var d = document.createElement('div');
-  d.className = 'av' + (big ? ' lg' : '');
   d.style.background = 'hsla(' + hue + ',85%,60%,.22)';
   d.style.color = 'hsl(' + hue + ',85%,72%)';
   d.textContent = (name.trim().charAt(0) || '?').toUpperCase();
   return d;
+}
+
+function avSrc(n) {
+  return './av/a' + (n < 10 ? '0' + n : n) + '.webp';
+}
+
+function playerById(id) {
+  if (!VIEW) return null;
+  var hit = VIEW.players.filter(function (p) { return p.id === id; });
+  return hit.length ? hit[0] : null;
+}
+
+/** วงกลมประจำตัวของผู้เล่นคนนั้น หาเองจาก id */
+function avOf(id, big) {
+  var p = playerById(id);
+  return avEl(p ? p.name : nameOf(id), big, p ? p.av : 0);
+}
+
+/* ---------- เสียงเตือน ----------
+ * สร้างเสียงเองด้วย WebAudio ไม่ต้องโหลดไฟล์เสียง
+ * เบราว์เซอร์ห้ามเล่นเสียงก่อนผู้ใช้แตะจอ จึงปลุก AudioContext ตอนแตะครั้งแรก
+ */
+var actx = null;
+function audio() {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+document.addEventListener('pointerdown', function once() {
+  audio();
+  document.removeEventListener('pointerdown', once);
+}, { once: true });
+
+function beep(freq, ms, delay) {
+  var c = audio();
+  if (!c) return;
+  var t = c.currentTime + (delay || 0);
+  var o = c.createOscillator();
+  var g = c.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.28, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
+  o.connect(g);
+  g.connect(c.destination);
+  o.start(t);
+  o.stop(t + ms / 1000 + 0.05);
+}
+
+/** เตือนว่าเหลือเวลาอีก 1 นาที */
+function lastMinuteWarning() {
+  beep(880, 150, 0);
+  beep(660, 240, 0.2);
+  try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) {}
 }
 
 /* ---------- รับสถานะแบบ push ----------
@@ -289,7 +358,7 @@ function renderLobby(v) {
   ul.innerHTML = '';
   v.players.forEach(function (p) {
     var li = document.createElement('li');
-    li.appendChild(avEl(p.name));
+    li.appendChild(avEl(p.name, false, p.av));
     var nm = document.createElement('span');
     nm.className = 'nm';
     nm.textContent = p.name;
@@ -348,7 +417,7 @@ function renderGame(v) {
   v.players.forEach(function (p) {
     var b = document.createElement('button');
     b.className = 'pbtn' + (p.id === v.you ? ' self' : '');
-    b.appendChild(avEl(p.name));
+    b.appendChild(avEl(p.name, false, p.av));
     var nm = document.createElement('span');
     nm.textContent = p.name;
     b.appendChild(nm);
@@ -378,12 +447,12 @@ function renderVote(v) {
 
   var avs = $('vote-avs');
   avs.innerHTML = '';
-  avs.appendChild(avEl(nameOf(vote.accuserId), true));
+  avs.appendChild(avOf(vote.accuserId, true));
   var vs = document.createElement('span');
   vs.className = 'vote-vs';
   vs.textContent = '⟶';
   avs.appendChild(vs);
-  avs.appendChild(avEl(nameOf(vote.targetId), true));
+  avs.appendChild(avOf(vote.targetId, true));
 
   $('vote-text').textContent = nameOf(vote.accuserId) + ' กล่าวหา ' + nameOf(vote.targetId);
   $('vote-progress').textContent = 'โหวตแล้ว ' + vote.votedIds.length + '/' + (v.players.length - 1) + ' คน';
@@ -418,7 +487,7 @@ function renderResult(v) {
   ul.innerHTML = '';
   v.players.slice().sort(function (a, b) { return b.score - a.score; }).forEach(function (p) {
     var li = document.createElement('li');
-    li.appendChild(avEl(p.name));
+    li.appendChild(avEl(p.name, false, p.av));
     var nm = document.createElement('span');
     nm.className = 'nm';
     nm.textContent = p.name;
@@ -501,7 +570,12 @@ var firedAt = 0;   // endsAt ที่ขอผลไปแล้ว กัน�
 setInterval(function () {
   if (!VIEW) return;
   if (VIEW.phase === 'playing' && VIEW.round) {
-    paintClock($('timer'), $('timer-bar'), VIEW.round.endsAt, VIEW.minutes * 60000, 60);
+    var left = paintClock($('timer'), $('timer-bar'), VIEW.round.endsAt, VIEW.minutes * 60000, 60);
+    // เตือนครั้งเดียวต่อรอบ ตอนเข้าสู่นาทีสุดท้าย
+    if (left <= 60 && left > 0 && warnedRound !== VIEW.roundNo) {
+      warnedRound = VIEW.roundNo;
+      lastMinuteWarning();
+    }
   } else if (VIEW.phase === 'vote' && VIEW.vote) {
     paintClock($('vote-timer'), $('vote-bar'), VIEW.vote.endsAt, 60000, 10);
   }
@@ -518,9 +592,44 @@ function paintClock(el, bar, endsAt, totalMs, warnSec) {
     firedAt = endsAt;
     refresh();
   }
+  return left;
 }
 
 /* ---------- การกระทำ ---------- */
+
+function buildAvPicker() {
+  var box = $('av-picker');
+  box.innerHTML = '';
+  for (var i = 0; i <= AVATARS; i++) {
+    (function (n) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'av-opt' + (n === MY_AV ? ' on' : '');
+      b.title = n ? 'รูปที่ ' + n : 'ใช้ตัวอักษรแรกของชื่อ';
+      if (n) {
+        var img = document.createElement('img');
+        img.src = avSrc(n);
+        img.alt = '';
+        img.loading = 'lazy';
+        b.appendChild(img);
+      } else {
+        var t = document.createElement('span');
+        t.className = 'letter';
+        t.textContent = 'ก';
+        b.appendChild(t);
+      }
+      b.onclick = function () {
+        MY_AV = n;
+        try { localStorage.setItem('sf_av', String(n)); } catch (e) {}
+        haptic();
+        var all = box.querySelectorAll('.av-opt');
+        for (var k = 0; k < all.length; k++) all[k].classList.remove('on');
+        b.classList.add('on');
+      };
+      box.appendChild(b);
+    })(i);
+  }
+}
 
 function myName() {
   var n = $('input-name').value.trim();
@@ -614,6 +723,8 @@ if (API.indexOf('PASTE_') === 0) {
   var saved = null;
   try { saved = JSON.parse(localStorage.getItem('sf_me') || 'null'); } catch (e) {}
   try { $('input-name').value = localStorage.getItem('sf_name') || ''; } catch (e) {}
+  try { MY_AV = parseInt(localStorage.getItem('sf_av') || '0', 10) || 0; } catch (e) {}
+  buildAvPicker();
 
   api('hello', {
     initData: (tg && tg.initData) || '',
