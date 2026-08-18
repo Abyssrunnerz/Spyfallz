@@ -25,6 +25,7 @@ var lastKey = '';   // ลายเซ็นของสิ่งที่วา
 var polling = null;
 var SOCK = null;       // WebSocket ที่ใช้อยู่
 var wsRetry = null;    // ตัวจับเวลาต่อใหม่
+var wsTries = 0;       // ต่อไม่ติดมากี่ครั้งแล้ว ใช้ถ่วงเวลาแบบทวีคูณ
 var MY_AV = 0;         // รูปประจำตัวที่เลือกไว้ 0 = ใช้วงกลมตัวอักษร
 var AVATARS = 27;      // จำนวนรูปใน web/av/
 var warnedRound = -1;  // เตือนเสียงไปแล้วในรอบไหน
@@ -128,6 +129,8 @@ function act(action, payload) {
     return res;
   }, function (err) {
     busy(false);
+    // hideProgress ปลดล็อกปุ่มหลักเสมอ ถ้าไม่วาดใหม่ ปุ่มที่ควรถูกปิดอยู่จะกดได้
+    if (VIEW) { lastKey = ''; render(); }
     throw err;
   });
 }
@@ -260,6 +263,9 @@ function startPolling() {
   connectWS();
   polling = setInterval(function () {
     if (document.hidden || !CODE) return;
+    // WebSocket ยังเปิดอยู่ก็ไม่ต้องถาม สถานะถูกส่งมาให้อยู่แล้ว
+    // ถามซ้ำ = เปลือง 1 คำขอ Worker + 1 คำขอ Durable Object โดยได้ข้อมูลเดิม
+    if (SOCK && SOCK.readyState === 1) return;
     refresh();
   }, POLL_MS);
 }
@@ -290,6 +296,7 @@ function connectWS() {
   try { sock = new WebSocket(url); } catch (e) { return; }
   SOCK = sock;
 
+  sock.onopen = function () { wsTries = 0; };
   sock.onmessage = function (e) {
     var view;
     try { view = JSON.parse(e.data); } catch (err) { return; }
@@ -298,7 +305,13 @@ function connectWS() {
   sock.onclose = function () {
     if (SOCK !== sock) return;   // เราปิดเอง ไม่ต้องต่อใหม่
     SOCK = null;
-    if (CODE) wsRetry = setTimeout(connectWS, 3000);
+    if (!CODE) return;
+    // อย่าต่อใหม่ตอนแท็บถูกซ่อน จะไปต่อตอนกลับมาดู (ดู visibilitychange)
+    if (document.hidden) return;
+    // ถ่วงเวลาแบบทวีคูณ 1→2→4…สูงสุด 30 วิ + สุ่มเล็กน้อย
+    // ของเดิมลองใหม่ทุก 3 วิไม่มีที่สิ้นสุด ถ้าเซิร์ฟเวอร์ล่มคือยิงรัวไม่หยุด
+    var delay = Math.min(30000, 1000 * Math.pow(2, wsTries++)) + Math.random() * 500;
+    wsRetry = setTimeout(connectWS, delay);
   };
   sock.onerror = function () { try { sock.close(); } catch (e) {} };
 }
@@ -340,6 +353,14 @@ function goHome() {
 
 function render() {
   var v = VIEW;
+
+  // แผงเดาสถานที่คลุมทั้งจอ ถ้าสถานะเปลี่ยนไปแล้วยังเปิดค้าง ผู้เล่นจะกดอะไรไม่ได้เลย
+  var sheetOpen = $('guess-sheet').classList.contains('show');
+  if (sheetOpen && (v.phase !== 'playing' || !v.round || !v.round.youAreSpy)) {
+    hideGuess();
+    sheetOpen = false;
+  }
+
   // ข้อมูลรอบจะหายไปเมื่อเราไม่ได้อยู่ในห้องแล้ว (เช่นเพิ่งกดออก แล้ว broadcast ตามมา)
   // ถ้าวาดต่อจะ throw เพราะ v.round เป็น undefined
   if (v.phase === 'lobby') renderLobby(v);
@@ -347,6 +368,12 @@ function render() {
   else if (v.phase === 'vote' && v.vote && v.round) renderVote(v);
   else if (v.phase === 'reveal' && v.result) renderResult(v);
   else goHome();
+
+  // ถ้าแผงยังเปิดอยู่ ต้องคืนปุ่มให้เป็นของแผง เพราะ render ด้านบนเพิ่งตั้งทับไป
+  if (sheetOpen) {
+    mainButton(null);
+    backButton(closeGuess);
+  }
 }
 
 function renderLobby(v) {
@@ -545,7 +572,7 @@ function buildLocs(container, strikeable) {
       : function () {
           ask('เดาว่าเป็น "' + name + '" ใช่ไหม? ผิดแล้วแพ้ทันที', function () {
             haptic('heavy');
-            closeGuess();
+            hideGuess();
             act('guess', { code: CODE, locIdx: i }).then(apply, fail);
           });
         };
@@ -560,15 +587,21 @@ function openGuess() {
   backButton(closeGuess);
 }
 
-function closeGuess() {
+/** ปิดแผงเฉย ๆ ไม่วาดจอใหม่ — ใช้ตอนถูกเรียกจากใน render() เพื่อกันวนซ้ำ */
+function hideGuess() {
   $('guess-sheet').classList.remove('show');
   backButton(null);
+}
+
+function closeGuess() {
+  hideGuess();
   if (VIEW) { lastKey = ''; render(); }
 }
 
 /* ---------- นาฬิกา ---------- */
 
-var firedAt = 0;   // endsAt ที่ขอผลไปแล้ว กันยิงซ้ำทุก 250ms ระหว่างรอเซิร์ฟเวอร์
+var firedAt = 0;      // เวลาที่ขอผลครั้งล่าสุด กันยิงรัวทุก 250ms
+var jitter = Math.random() * 1500;   // เหลื่อมเวลาระหว่างผู้เล่น กันทุกคนยิงพร้อมกัน
 
 setInterval(function () {
   if (!VIEW) return;
@@ -591,8 +624,12 @@ function paintClock(el, bar, endsAt, totalMs, warnSec) {
   el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
   el.classList.toggle('warn', left <= warnSec);
   bar.style.width = Math.min(100, (leftMs / totalMs) * 100) + '%';
-  if (left === 0 && firedAt !== endsAt) {
-    firedAt = endsAt;
+  // ปกติเซิร์ฟเวอร์ตั้งนาฬิกาปลุกของตัวเองแล้วส่งผลมาทาง WebSocket
+  // อันนี้เป็นตาข่ายกันพลาด จึงต้องยิง "หลัง" เส้นตายจริงเท่านั้น
+  // ของเดิมใช้วินาทีที่ปัดแล้วจึงยิงก่อนถึงเวลาได้ถึงครึ่งวินาที เซิร์ฟเวอร์ยังไม่มีอะไรให้ แล้วล็อกไม่ยอมลองอีก
+  var t = Date.now();
+  if (leftMs <= -jitter && t - firedAt > 3000) {
+    firedAt = t;
     refresh();
   }
   return left;
@@ -705,7 +742,9 @@ $('btn-leave').onclick = $('btn-leave-game').onclick = $('btn-leave-result').onc
 $('input-code').addEventListener('input', syncHomeButton);
 
 document.addEventListener('visibilitychange', function () {
-  if (!document.hidden && CODE) refresh();
+  if (document.hidden || !CODE) return;
+  refresh();
+  if (!SOCK) { wsTries = 0; connectWS(); }
 });
 
 /* ---------- เริ่มทำงาน ---------- */
