@@ -218,3 +218,15 @@ body {
   transition: opacity .2s, transform .2s; z-index: 30;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- สถานะกำลังรอเซิร์ฟเวอร์ ----------
+ * Apps Script ใช้เวลาตอบ 1.5-3 วินาทีเป็นปกติ แก้ที่ฝั่งเราไม่ได้
+ * จึงต้องตอบสนองการแตะทันทีเพื่อไม่ให้ผู้เล่นกดซ้ำเพราะคิดว่าไม่ติด
+ */
+#netbar {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0;
+  background: var(--red); z-index: 40; opacity: 0;
+  transition: width .25s ease, opacity .2s ease;
+}
+body.busy #netbar { width: 92%; opacity: 1; transition: width 3s cubic-bezier(0, .75, .25, 1), opacity .1s; }
+body.busy .btn, body.busy .pbtn, body.busy .loc { pointer-events: none; opacity: .5; }

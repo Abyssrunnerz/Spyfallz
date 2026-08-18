@@ -107,11 +107,26 @@ function fetchOnce(url) {
   });
 }
 
+/** ตอบสนองการแตะทันที — Apps Script ใช้เวลา 1.5-3 วิเป็นปกติ ลดไม่ได้จากฝั่งเรา
+ *  ถ้าไม่มีอะไรขยับเลย ผู้เล่นจะคิดว่ากดไม่ติดแล้วกดซ้ำ */
+function busy(on) {
+  document.body.classList.toggle('busy', on);
+  try {
+    if (on) tg.MainButton.showProgress();
+    else tg.MainButton.hideProgress();   // ปลดล็อกปุ่มด้วยเสมอ — render รอบถัดไปจะตั้งสถานะจริงให้เอง
+  } catch (e) {}
+}
+
 function act(action, payload) {
+  busy(true);
   return api(action, payload).then(function (res) {
+    busy(false);
     if (res && res.me) ME = res.me;
     if (!res || !res.ok) throw new Error((res && res.error) || 'เชื่อมต่อไม่ได้');
     return res;
+  }, function (err) {
+    busy(false);
+    throw err;
   });
 }
 
