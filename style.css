@@ -316,3 +316,58 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------- เฟสแจกไพ่ ---------- */
+.deal-head { text-align: center; padding: 18px 0 14px; }
+.deal-title { font-size: 24px; font-weight: 800; margin: 4px 0 6px; letter-spacing: -.2px; }
+.eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+.deal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+
+/* ใช้ 3D flip จริง ไม่ใช่สลับรูป จะได้รู้สึกเหมือนพลิกไพ่ */
+.card { aspect-ratio: 3 / 4; perspective: 900px; background: none; border: 0; padding: 0; cursor: pointer; }
+.card-inner {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d; transition: transform .55s cubic-bezier(.2, .8, .2, 1);
+}
+.card.flipped .card-inner { transform: rotateY(180deg); }
+.card-face {
+  position: absolute; inset: 0; backface-visibility: hidden;
+  border-radius: var(--r-lg); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 8px; text-align: center;
+}
+
+/* หลังไพ่: ลายวงเลนส์เดียวกับตราของเกม */
+.card-back {
+  background:
+    radial-gradient(circle at 50% 46%, transparent 15px, var(--red-bg) 16px, transparent 17px),
+    radial-gradient(circle at 50% 46%, var(--red) 5px, transparent 6px),
+    var(--card);
+  border: 1px solid var(--line);
+}
+.card-no { position: absolute; bottom: 8px; font-size: 11px; color: var(--muted); font-weight: 700; }
+.card:not(.taken):active .card-inner { transform: scale(.94); }
+
+/* ใบที่คนอื่นถือไปแล้ว */
+.card.taken .card-back { border-color: rgba(255, 255, 255, .14); opacity: .55; }
+.card.taken { cursor: default; }
+.card-owner { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.card-owner .av { width: 30px; height: 30px; flex-basis: 30px; font-size: 13px; }
+.card-owner span { font-size: 10.5px; color: var(--dim); max-width: 74px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* หน้าไพ่ของเรา */
+.card-front {
+  transform: rotateY(180deg);
+  background: var(--card); border: 1px solid var(--line);
+}
+.card-front.spy { background: var(--red-grad); border-color: var(--red); }
+.card-front .where { font-size: 13.5px; font-weight: 800; line-height: 1.25; }
+.card-front .role { font-size: 11px; color: var(--dim); }
+.card-front.spy .where { color: #fff; }
+.card-front.spy .role { color: rgba(255, 255, 255, .85); }
+
+.deal-clock { margin: 12px 0 16px; }

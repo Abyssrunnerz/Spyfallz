@@ -149,7 +149,7 @@ function fail(err) { toast(String((err && err.message) || err)); }
 /* ---------- หน้าจอ ---------- */
 
 function show(name) {
-  ['home', 'lobby', 'game', 'vote', 'result'].forEach(function (s) {
+  ['home', 'lobby', 'deal', 'game', 'vote', 'result'].forEach(function (s) {
     $('screen-' + s).classList.toggle('active', s === name);
   });
   window.scrollTo(0, 0);
@@ -382,6 +382,7 @@ function render() {
   // ข้อมูลรอบจะหายไปเมื่อเราไม่ได้อยู่ในห้องแล้ว (เช่นเพิ่งกดออก แล้ว broadcast ตามมา)
   // ถ้าวาดต่อจะ throw เพราะ v.round เป็น undefined
   if (v.phase === 'lobby') renderLobby(v);
+  else if (v.phase === 'dealing' && v.deal) renderDeal(v);
   else if (v.phase === 'playing' && v.round) renderGame(v);
   else if (v.phase === 'vote' && v.vote && v.round) renderVote(v);
   else if (v.phase === 'reveal' && v.result) renderResult(v);
@@ -442,6 +443,93 @@ function renderLobby(v) {
   $('btn-start').disabled = few;
   $('btn-start').style.display = isHost ? 'block' : 'none';
   mainButton(isHost ? label : null, startRound, few);
+}
+
+/** เฟสแจกไพ่ — ไพ่คว่ำเท่าจำนวนคน แตะได้ใบเดียว พลิกแล้วเปลี่ยนไม่ได้ */
+function renderDeal(v) {
+  show('deal');
+  backButton(null);
+  mainButton(null);
+
+  var d = v.deal;
+  var picked = Object.keys(d.taken).length;
+  $('deal-status').textContent = 'หยิบแล้ว ' + picked + '/' + v.players.length + ' คน';
+  $('deal-note').textContent = d.yours === null
+    ? 'เลือกได้ใบเดียว เลือกแล้วเปลี่ยนไม่ได้'
+    : 'รอเพื่อนที่เหลือหยิบให้ครบ แล้วเกมจะเริ่มเอง';
+  $('btn-cancel-deal').style.display = (v.you === v.hostId) ? 'block' : 'none';
+
+  var grid = $('deal-grid');
+  grid.innerHTML = '';
+  for (var i = 0; i < d.n; i++) {
+    grid.appendChild(dealCard(v, d, i));
+  }
+}
+
+function dealCard(v, d, i) {
+  var ownerId = d.taken[String(i)] || null;
+  var isMine = (d.yours === i);
+
+  var card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'card' + (ownerId ? ' taken' : '') + (isMine ? ' flipped' : '');
+  card.disabled = !!ownerId || d.yours !== null;
+
+  var inner = document.createElement('div');
+  inner.className = 'card-inner';
+
+  var back = document.createElement('div');
+  back.className = 'card-face card-back';
+  if (ownerId && !isMine) {
+    var who = document.createElement('div');
+    who.className = 'card-owner';
+    var p = playerById(ownerId);
+    who.appendChild(avEl(p ? p.name : nameOf(ownerId), false, p ? p.av : 0));
+    var nm = document.createElement('span');
+    nm.textContent = p ? p.name : nameOf(ownerId);
+    who.appendChild(nm);
+    back.appendChild(who);
+  } else {
+    var no = document.createElement('div');
+    no.className = 'card-no';
+    no.textContent = i + 1;
+    back.appendChild(no);
+  }
+
+  var front = document.createElement('div');
+  front.className = 'card-face card-front';
+  if (isMine && d.card) {
+    var where = document.createElement('div');
+    where.className = 'where';
+    var role = document.createElement('div');
+    role.className = 'role';
+    if (d.card.spy) {
+      front.className += ' spy';
+      where.textContent = 'คุณคือสายลับ';
+      role.textContent = 'อย่าให้ใครจับได้';
+    } else {
+      where.textContent = d.card.location;
+      role.textContent = d.card.role;
+    }
+    front.appendChild(where);
+    front.appendChild(role);
+  }
+
+  inner.appendChild(back);
+  inner.appendChild(front);
+  card.appendChild(inner);
+
+  if (!card.disabled) {
+    card.onclick = function () {
+      haptic('medium');
+      card.classList.add('flipped');          // พลิกทันที ไม่รอเซิร์ฟเวอร์
+      act('pick', { code: CODE, cardIdx: i }).then(apply, function (err) {
+        card.classList.remove('flipped');     // เซิร์ฟเวอร์ปฏิเสธ พลิกกลับ
+        fail(err);
+      });
+    };
+  }
+  return card;
 }
 
 function renderGame(v) {
@@ -570,6 +658,7 @@ function renderResult(v) {
   var label = 'เริ่มรอบที่ ' + (v.roundNo + 1);
   $('result-wait').textContent = isHost ? '' : 'รอหัวห้องเริ่มรอบต่อไป';
   $('btn-next').textContent = label;
+  $('redeal-note').textContent = v.redealAt ? '' : '';
   $('btn-next').style.display = isHost ? 'block' : 'none';
   mainButton(isHost ? label : null, startRound);
 }
@@ -635,7 +724,12 @@ var jitter = Math.random() * 1500;   // เหลื่อมเวลาระ�
 
 setInterval(function () {
   if (!VIEW) return;
-  if (VIEW.phase === 'playing' && VIEW.round) {
+  if (VIEW.phase === 'dealing' && VIEW.deal) {
+    paintClock($('deal-timer'), $('deal-bar'), VIEW.deal.endsAt, 30000, 10);
+  } else if (VIEW.phase === 'reveal' && VIEW.redealAt) {
+    var left = Math.max(0, Math.round((VIEW.redealAt - (Date.now() + SKEW)) / 1000));
+    $('redeal-note').textContent = 'แจกไพ่รอบใหม่ใน ' + left + ' วินาที';
+  } else if (VIEW.phase === 'playing' && VIEW.round) {
     var left = paintClock($('timer'), $('timer-bar'), VIEW.round.endsAt, VIEW.minutes * 60000, 60);
     // เตือนครั้งเดียวต่อรอบ ตอนเข้าสู่นาทีสุดท้าย
     if (left <= 60 && left > 0 && warnedRound !== VIEW.roundNo) {
@@ -768,6 +862,11 @@ $('btn-vote-yes').onclick = function () { castVote(true); };
 $('btn-vote-no').onclick = function () { castVote(false); };
 $('btn-open-guess').onclick = openGuess;
 $('btn-guess-cancel').onclick = closeGuess;
+$('btn-cancel-deal').onclick = function () {
+  ask('ยกเลิกการแจกไพ่ กลับไปล็อบบี้?', function () {
+    act('canceldeal', { code: CODE }).then(apply, fail);
+  });
+};
 $('btn-leave').onclick = $('btn-leave-game').onclick = $('btn-leave-result').onclick = leaveRoom;
 $('input-code').addEventListener('input', syncHomeButton);
 

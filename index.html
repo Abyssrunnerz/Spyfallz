@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=11">
+<link rel="stylesheet" href="./style.css?v=12">
 </head>
 <body>
 
@@ -85,6 +85,24 @@
   <button id="btn-leave" class="btn btn-ghost">ออกจากห้อง</button>
 </section>
 
+<!-- ---------- แจกไพ่ ---------- -->
+<section id="screen-deal" class="screen">
+  <div class="deal-head">
+    <div class="eyebrow">เลือกไพ่ของคุณ</div>
+    <h2 class="deal-title">แตะไพ่หนึ่งใบ</h2>
+    <p id="deal-status" class="hint"></p>
+    <div class="clock deal-clock">
+      <div id="deal-timer" class="clock-value sm">--</div>
+      <div class="bar"><div id="deal-bar" class="bar-fill"></div></div>
+    </div>
+  </div>
+
+  <div id="deal-grid" class="deal-grid"></div>
+
+  <p id="deal-note" class="hint"></p>
+  <button id="btn-cancel-deal" class="btn btn-ghost">ยกเลิกการแจกไพ่</button>
+</section>
+
 <!-- ---------- กำลังเล่น ---------- -->
 <section id="screen-game" class="screen">
   <div class="clock">
@@ -153,6 +171,7 @@
   </div>
 
   <p id="result-wait" class="hint"></p>
+  <p id="redeal-note" class="hint"></p>
   <div id="result-actions" class="fallback-actions">
     <button id="btn-next" class="btn btn-primary">รอบต่อไป</button>
   </div>
@@ -171,6 +190,6 @@
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=11"></script>
+<script src="./app.js?v=12"></script>
 </body>
 </html>
