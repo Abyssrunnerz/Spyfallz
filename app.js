@@ -340,10 +340,13 @@ function goHome() {
 
 function render() {
   var v = VIEW;
+  // ข้อมูลรอบจะหายไปเมื่อเราไม่ได้อยู่ในห้องแล้ว (เช่นเพิ่งกดออก แล้ว broadcast ตามมา)
+  // ถ้าวาดต่อจะ throw เพราะ v.round เป็น undefined
   if (v.phase === 'lobby') renderLobby(v);
-  else if (v.phase === 'playing') renderGame(v);
-  else if (v.phase === 'vote') renderVote(v);
-  else if (v.phase === 'reveal') renderResult(v);
+  else if (v.phase === 'playing' && v.round) renderGame(v);
+  else if (v.phase === 'vote' && v.vote && v.round) renderVote(v);
+  else if (v.phase === 'reveal' && v.result) renderResult(v);
+  else goHome();
 }
 
 function renderLobby(v) {
@@ -732,7 +735,7 @@ if (API.indexOf('PASTE_') === 0) {
     sig: saved && saved.sig,
     name: $('input-name').value
   }).then(function (res) {
-    if (!res || !res.ok) { fail(res && res.error); show('home'); return; }
+    if (!res || !res.ok) { fail(res && res.error); goHome(); return; }
     ME = res.me;
     LOCS = res.locations;
     INVITE = res.invite || '';
@@ -746,7 +749,7 @@ if (API.indexOf('PASTE_') === 0) {
       goHome();
     }
   }, function (err) {
-    show('home');
+    goHome();
     fail(err);
   });
 }
