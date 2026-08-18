@@ -1,9 +1,9 @@
 /* Spyfall — ไคลเอนต์ Telegram Mini App
  *
- * ▼▼▼ แก้บรรทัดเดียวนี้ก่อนใช้งาน ▼▼▼
- * วาง URL ของ Apps Script deployment (ลงท้ายด้วย /exec) ลงไป
+ * ▼▼▼ แก้บรรทัดเดียวนี้ถ้าย้ายแบ็กเอนด์ ▼▼▼
+ * URL ของ Cloudflare Worker (ลงท้ายด้วย /)
  */
-var API = 'https://script.google.com/macros/s/AKfycbxIvDBX0TI5KIiHizw4tSt7WyccNpu16zQH_sHuvJpXteF8kNgE-SJHV8mjdV3u-Coj/exec';
+var API = 'https://spyfall-api.j4ck-manop.workers.dev/';
 /* ▲▲▲ ไม่ต้องแก้อะไรใต้บรรทัดนี้ ▲▲▲ */
 
 (function () {
@@ -11,7 +11,7 @@ var API = 'https://script.google.com/macros/s/AKfycbxIvDBX0TI5KIiHizw4tSt7WyccNp
 
 if (window.API_BASE) API = window.API_BASE;   // dev server ใส่ค่าให้เอง
 
-var POLL_MS = 2500;
+var POLL_MS = 15000;   // ตาข่ายกันพลาดเท่านั้น สถานะจริงมาทาง WebSocket
 var tg = window.Telegram && window.Telegram.WebApp;
 var inTelegram = !!(tg && tg.platform && tg.platform !== 'unknown');
 
@@ -23,6 +23,8 @@ var CODE = '';      // รหัสห้องที่อยู่
 var SKEW = 0;       // เวลาเซิร์ฟเวอร์ - เวลาเครื่อง
 var lastKey = '';   // ลายเซ็นของสิ่งที่วาดไปแล้ว กันวาดซ้ำ
 var polling = null;
+var SOCK = null;       // WebSocket ที่ใช้อยู่
+var wsRetry = null;    // ตัวจับเวลาต่อใหม่
 
 var $ = function (id) { return document.getElementById(id); };
 
@@ -84,17 +86,15 @@ function backButton(action) {
 }
 
 /* ---------- API ----------
- * ต้องเป็น CORS simple request เท่านั้น: GET ล้วน ไม่ใส่ header เอง ไม่ตั้ง credentials
- * ถ้าเผลอทำให้เกิด preflight จะตายทันที เพราะ Apps Script ตอบ OPTIONS ไม่ได้
  * initData ส่งเฉพาะตอน hello ครั้งเดียว แล้วใช้ลายเซ็นสั้นของเซิร์ฟเวอร์ต่อ
+ * จะได้ไม่ต้องแนบข้อมูลตัวตนก้อนใหญ่ไปกับทุกคำขอ
  */
 function api(action, payload) {
   var p = payload || {};
   if (ME) { p.uid = ME.uid; p.name = ME.name; p.sig = ME.sig; }
   var url = API + '?api=' + encodeURIComponent(action) + '&p=' + encodeURIComponent(JSON.stringify(p));
   return fetchOnce(url).catch(function () {
-    // Apps Script ตอบ 404/302 ให้ 1-2 คำขอแรกหลังพักไปนาน (cold start) แล้วค่อยนิ่ง
-    // ลองซ้ำครั้งเดียวเมื่อพลาดระดับ transport เท่านั้น — ระดับนี้แปลว่าโค้ดเรายังไม่ทันได้ทำงาน
+    // ลองซ้ำครั้งเดียวเมื่อพลาดระดับ transport เท่านั้น (เน็ตสะดุด/คำขอแรกหลัง deploy)
     // ถ้าเซิร์ฟเวอร์ตอบ ok:false มาแล้ว จะไม่ลองซ้ำ เพราะนั่นคือคำตอบจริง
     return new Promise(function (r) { setTimeout(r, 700); }).then(function () { return fetchOnce(url); });
   });
@@ -107,8 +107,7 @@ function fetchOnce(url) {
   });
 }
 
-/** ตอบสนองการแตะทันที — Apps Script ใช้เวลา 1.5-3 วิเป็นปกติ ลดไม่ได้จากฝั่งเรา
- *  ถ้าไม่มีอะไรขยับเลย ผู้เล่นจะคิดว่ากดไม่ติดแล้วกดซ้ำ */
+/** ตอบสนองการแตะทันทีโดยไม่รอเซิร์ฟเวอร์ กันผู้เล่นกดซ้ำเพราะคิดว่าไม่ติด */
 function busy(on) {
   document.body.classList.toggle('busy', on);
   try {
@@ -181,18 +180,58 @@ function avEl(name, big) {
   return d;
 }
 
-/* ---------- polling ---------- */
+/* ---------- รับสถานะแบบ push ----------
+ * เซิร์ฟเวอร์ส่งสถานะมาให้ทันทีที่มีอะไรเปลี่ยน ไม่ต้องถามซ้ำ ๆ
+ * poll ที่เหลือไว้เป็นตาข่ายกันพลาดเผื่อ WebSocket ต่อไม่ได้ (เน็ตบางที่บล็อก)
+ * ห่าง 15 วิ จึงกินโควตาแค่ 1 ใน 6 ของเดิม
+ */
 
 function startPolling() {
   stopPolling();
+  connectWS();
   polling = setInterval(function () {
-    if (document.hidden || !CODE) return;   // ประหยัดโควตา runtime ของ Apps Script
+    if (document.hidden || !CODE) return;
     refresh();
   }, POLL_MS);
 }
 
 function stopPolling() {
   if (polling) { clearInterval(polling); polling = null; }
+  closeWS();
+}
+
+function closeWS() {
+  if (wsRetry) { clearTimeout(wsRetry); wsRetry = null; }
+  if (SOCK) {
+    var s = SOCK;
+    SOCK = null;
+    try { s.close(); } catch (e) {}
+  }
+}
+
+function connectWS() {
+  if (!CODE || !ME || !window.WebSocket) return;
+  closeWS();
+  var url = API.replace(/^http/, 'ws').replace(/\/$/, '') +
+    '/ws?code=' + encodeURIComponent(CODE) +
+    '&uid=' + encodeURIComponent(ME.uid) +
+    '&sig=' + encodeURIComponent(ME.sig);
+
+  var sock;
+  try { sock = new WebSocket(url); } catch (e) { return; }
+  SOCK = sock;
+
+  sock.onmessage = function (e) {
+    var view;
+    try { view = JSON.parse(e.data); } catch (err) { return; }
+    if (view && view.ok) apply(view);
+  };
+  sock.onclose = function () {
+    if (SOCK !== sock) return;   // เราปิดเอง ไม่ต้องต่อใหม่
+    SOCK = null;
+    if (CODE) wsRetry = setTimeout(connectWS, 3000);
+  };
+  sock.onerror = function () { try { sock.close(); } catch (e) {} };
 }
 
 function refresh() {
