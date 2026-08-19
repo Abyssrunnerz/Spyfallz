@@ -374,7 +374,8 @@ function render() {
 
   // แผงเดาสถานที่คลุมทั้งจอ ถ้าสถานะเปลี่ยนไปแล้วยังเปิดค้าง ผู้เล่นจะกดอะไรไม่ได้เลย
   var sheetOpen = $('guess-sheet').classList.contains('show');
-  if (sheetOpen && (v.phase !== 'playing' || !v.round || !v.round.youAreSpy)) {
+  var canGuess = (v.phase === 'playing' || v.phase === 'vote') && v.round && v.round.youAreSpy;
+  if (sheetOpen && !canGuess) {
     hideGuess();
     sheetOpen = false;
   }
@@ -597,6 +598,8 @@ function renderVote(v) {
   var done = vote.youVoted || isTarget;
   $('btn-vote-yes').style.display = done ? 'none' : 'block';
   $('btn-vote-no').style.display = done ? 'none' : 'block';
+  // เซิร์ฟเวอร์อนุญาตให้สายลับเดาระหว่างโหวตอยู่แล้ว ต้องมีปุ่มให้ด้วย
+  $('btn-guess-vote').style.display = (v.round && v.round.youAreSpy) ? 'block' : 'none';
   $('vote-waiting').textContent = isTarget ? 'คุณคือคนที่ถูกกล่าวหา — รอผลโหวต'
                                 : done ? 'โหวตแล้ว รอคนอื่น...' : '';
   mainButton(done ? null : 'ใช่ เขาคือสายลับ', function () { castVote(true); });
@@ -861,6 +864,7 @@ $('btn-share').onclick = share;
 $('btn-vote-yes').onclick = function () { castVote(true); };
 $('btn-vote-no').onclick = function () { castVote(false); };
 $('btn-open-guess').onclick = openGuess;
+$('btn-guess-vote').onclick = openGuess;
 $('btn-guess-cancel').onclick = closeGuess;
 $('btn-cancel-deal').onclick = function () {
   ask('ยกเลิกการแจกไพ่ กลับไปล็อบบี้?', function () {
