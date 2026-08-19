@@ -916,7 +916,16 @@ if (API.indexOf('PASTE_') === 0) {
   var saved = null;
   try { saved = JSON.parse(localStorage.getItem('sf_me') || 'null'); } catch (e) {}
   try { $('input-name').value = localStorage.getItem('sf_name') || ''; } catch (e) {}
-  try { MY_AV = parseInt(localStorage.getItem('sf_av') || '0', 10) || 0; } catch (e) {}
+  // ยังไม่เคยเลือกรูป = สุ่มให้หนึ่งรูป แล้วจำไว้ จะได้ไม่เปลี่ยนหน้าทุกครั้งที่เปิดแอป
+  // ต้องเช็ค null ตรง ๆ เพราะ "ไม่เคยเลือก" กับ "เลือกวงกลมตัวอักษร" ต่างเก็บค่าอ่านได้เป็น 0 เหมือนกัน
+  var savedAv = null;
+  try { savedAv = localStorage.getItem('sf_av'); } catch (e) {}
+  if (savedAv === null) {
+    MY_AV = 1 + Math.floor(Math.random() * AVATARS);
+    try { localStorage.setItem('sf_av', String(MY_AV)); } catch (e) {}
+  } else {
+    MY_AV = parseInt(savedAv, 10) || 0;
+  }
   buildAvPicker();
 
   api('hello', {
