@@ -149,7 +149,7 @@ function fail(err) { toast(String((err && err.message) || err)); }
 /* ---------- หน้าจอ ---------- */
 
 function show(name) {
-  ['home', 'lobby', 'deal', 'game', 'vote', 'result'].forEach(function (s) {
+  ['home', 'lobby', 'deal', 'game', 'vote', 'guess', 'result'].forEach(function (s) {
     $('screen-' + s).classList.toggle('active', s === name);
   });
   window.scrollTo(0, 0);
@@ -350,7 +350,7 @@ function apply(view) {
   VIEW = view;
   CODE = view.code;
   SKEW = view.now - Date.now();
-  var key = view.version + '|' + view.phase + '|' + (view.vote ? view.vote.votedIds.length : 0);
+  var key = view.version + '|' + view.phase + '|' + (view.vote ? view.vote.voted : 0);
   if (key === lastKey) return;
   lastKey = key;
   render();
@@ -372,28 +372,15 @@ function goHome() {
 function render() {
   var v = VIEW;
 
-  // แผงเดาสถานที่คลุมทั้งจอ ถ้าสถานะเปลี่ยนไปแล้วยังเปิดค้าง ผู้เล่นจะกดอะไรไม่ได้เลย
-  var sheetOpen = $('guess-sheet').classList.contains('show');
-  var canGuess = (v.phase === 'playing' || v.phase === 'vote') && v.round && v.round.youAreSpy;
-  if (sheetOpen && !canGuess) {
-    hideGuess();
-    sheetOpen = false;
-  }
-
   // ข้อมูลรอบจะหายไปเมื่อเราไม่ได้อยู่ในห้องแล้ว (เช่นเพิ่งกดออก แล้ว broadcast ตามมา)
   // ถ้าวาดต่อจะ throw เพราะ v.round เป็น undefined
   if (v.phase === 'lobby') renderLobby(v);
   else if (v.phase === 'dealing' && v.deal) renderDeal(v);
   else if (v.phase === 'playing' && v.round) renderGame(v);
   else if (v.phase === 'vote' && v.vote && v.round) renderVote(v);
+  else if (v.phase === 'guessing' && v.guess) renderGuess(v);
   else if (v.phase === 'reveal' && v.result) renderResult(v);
   else goHome();
-
-  // ถ้าแผงยังเปิดอยู่ ต้องคืนปุ่มให้เป็นของแผง เพราะ render ด้านบนเพิ่งตั้งทับไป
-  if (sheetOpen) {
-    mainButton(null);
-    backButton(closeGuess);
-  }
 }
 
 function renderLobby(v) {
@@ -473,7 +460,7 @@ function dealCard(v, d, i) {
 
   var card = document.createElement('button');
   card.type = 'button';
-  card.className = 'card' + (ownerId ? ' taken' : '') + (isMine ? ' flipped' : '');
+  card.className = 'deal-card' + (ownerId ? ' taken' : '') + (isMine ? ' flipped' : '');
   card.disabled = !!ownerId || d.yours !== null;
 
   var inner = document.createElement('div');
@@ -533,6 +520,13 @@ function dealCard(v, d, i) {
   return card;
 }
 
+var secretRound = -1;
+
+function showSecret(open) {
+  $('secret').classList.toggle('open', open);
+  $('secret').setAttribute('aria-label', open ? 'แตะเพื่อปิดการ์ด' : 'แตะเพื่อดูการ์ดของคุณ');
+}
+
 function renderGame(v) {
   show('game');
   backButton(null);
@@ -541,7 +535,11 @@ function renderGame(v) {
     ? 'โหวตไม่ผ่าน — ' + nameOf(r.lastVote.targetId) + ' รอดไป (เห็นด้วย ' + r.lastVote.yes + ' / ไม่เห็นด้วย ' + r.lastVote.no + ')'
     : '');
 
-  $('secret').classList.toggle('is-spy', r.youAreSpy);
+  // การ์ดปิดไว้ก่อน เปิดดูเองได้ตอนลืม — ปิดกลับทุกครั้งที่ขึ้นรอบใหม่
+  // เช็คด้วยเลขรอบ ไม่ใช่ทุกครั้งที่วาดจอ ไม่งั้นการ์ดจะหุบใส่หน้าคนที่กำลังอ่าน
+  if (secretRound !== v.roundNo) { secretRound = v.roundNo; showSecret(false); }
+
+  $('secret-front').classList.toggle('is-spy', r.youAreSpy);
   $('secret-main').textContent = r.youAreSpy ? 'คุณคือสายลับ' : r.location;
   $('secret-role').textContent = r.youAreSpy
     ? 'ฟังให้ดี แล้วเดาให้ออกว่าที่นี่คือที่ไหน'
@@ -572,9 +570,7 @@ function renderGame(v) {
     : 'คุณใช้สิทธิ์กล่าวหาไปแล้วในรอบนี้';
 
   $('btn-open-guess').style.display = r.youAreSpy ? 'block' : 'none';
-  mainButton(r.youAreSpy ? 'เปิดตัว & เดาสถานที่' : null, openGuess);
-
-  buildLocs($('loc-list'), true);
+  mainButton(r.youAreSpy ? 'เปิดตัว & เดาสถานที่' : null, revealSelf);
 }
 
 function renderVote(v) {
@@ -582,17 +578,13 @@ function renderVote(v) {
   backButton(null);
   var vote = v.vote;
 
+  // ไม่เปิดเผยผู้กล่าวหา แสดงแค่คนที่ถูกกล่าวหา
   var avs = $('vote-avs');
   avs.innerHTML = '';
-  avs.appendChild(avOf(vote.accuserId, true));
-  var vs = document.createElement('span');
-  vs.className = 'vote-vs';
-  vs.textContent = '⟶';
-  avs.appendChild(vs);
   avs.appendChild(avOf(vote.targetId, true));
 
-  $('vote-text').textContent = nameOf(vote.accuserId) + ' กล่าวหา ' + nameOf(vote.targetId);
-  $('vote-progress').textContent = 'โหวตแล้ว ' + vote.votedIds.length + '/' + (v.players.length - 1) + ' คน';
+  $('vote-text').textContent = 'มีคนกล่าวหา ' + nameOf(vote.targetId) + ' ว่าเป็นสายลับ';
+  $('vote-progress').textContent = 'โหวตแล้ว ' + vote.voted + '/' + (v.players.length - 1) + ' คน';
 
   var isTarget = (v.you === vote.targetId);
   var done = vote.youVoted || isTarget;
@@ -603,6 +595,30 @@ function renderVote(v) {
   $('vote-waiting').textContent = isTarget ? 'คุณคือคนที่ถูกกล่าวหา — รอผลโหวต'
                                 : done ? 'โหวตแล้ว รอคนอื่น...' : '';
   mainButton(done ? null : 'ใช่ เขาคือสายลับ', function () { castVote(true); });
+}
+
+/**
+ * สายลับเปิดตัวแล้ว — ทุกคนในห้องเห็นจอนี้พร้อมกัน
+ * ไม่มีปุ่มถอย ไม่มี MainButton เพราะเปิดตัวแล้วย้อนกลับไม่ได้
+ * สายลับต้องเลือกสถานที่ คนอื่นได้แต่ดูนาฬิกาเดิน
+ */
+function renderGuess(v) {
+  show('guess');
+  backButton(null);
+  mainButton(null);
+
+  var iAmSpy = (v.you === v.guess.spyId);
+  var av = $('guess-av');
+  av.innerHTML = '';
+  av.appendChild(avOf(v.guess.spyId, true));
+
+  $('guess-title').textContent = iAmSpy ? 'คุณเปิดตัวแล้ว' : nameOf(v.guess.spyId) + ' คือสายลับ';
+  $('guess-sub').textContent = iAmSpy
+    ? 'เลือกสถานที่ให้ถูก — ถูก = ชนะทันที · ผิดหรือเลือกไม่ทัน = แพ้'
+    : 'เปิดตัวเองแล้ว กำลังเลือกสถานที่ — ถ้าเดาผิดหรือไม่ทัน ผู้เล่นชนะ';
+
+  $('guess-pick').style.display = iAmSpy ? 'block' : 'none';
+  if (iAmSpy) buildGuessList();
 }
 
 function renderResult(v) {
@@ -616,7 +632,8 @@ function renderResult(v) {
     wrong_accusation: ['spy', 'สายลับชนะ', 'โหวตผิดคน ' + nameOf(res.targetId) + ' ไม่ใช่สายลับ — สายลับคือ ' + spy],
     spy_guessed:      ['spy', 'สายลับชนะ', spy + ' เดาถูก: ' + res.location],
     spy_wrong_guess:  ['players', 'ผู้เล่นชนะ', spy + ' เดาผิด (ทาย ' + res.guess + ') — ที่จริงคือ ' + res.location],
-    spy_survived:     ['spy', 'สายลับรอด', 'หมดเวลา — สายลับคือ ' + spy + ' · สถานที่คือ ' + res.location]
+    spy_survived:     ['spy', 'สายลับรอด', 'หมดเวลา — สายลับคือ ' + spy + ' · สถานที่คือ ' + res.location],
+    spy_no_guess:     ['players', 'ผู้เล่นชนะ', spy + ' เปิดตัวแล้วเลือกสถานที่ไม่ทัน — ที่จริงคือ ' + res.location]
   }[res.type] || ['none', 'จบรอบ', ''];
 
   var badge = $('result-emoji');
@@ -652,7 +669,7 @@ function renderResult(v) {
   // สายลับที่รอดต้องได้ยินเสียงชนะ ทั้งที่ "ผู้เล่น" แพ้
   if (soundedRound !== v.roundNo) {
     soundedRound = v.roundNo;
-    var spyWon = (res.type !== 'spy_caught' && res.type !== 'spy_wrong_guess');
+    var spyWon = (t[0] !== 'players');   // ใช้คำตัดสินเดียวกับตราผล ไม่เก็บรายชื่อผลไว้สองที่
     var iAmSpy = (res.spyId === v.you);
     if (spyWon === iAmSpy) winSound(); else loseSound();
   }
@@ -666,58 +683,32 @@ function renderResult(v) {
   mainButton(isHost ? label : null, startRound);
 }
 
-/* ---------- สถานที่ + การขีดฆ่า (เก็บในเครื่องผู้เล่นเอง) ---------- */
+/* ---------- รายชื่อสถานที่ ----------
+ * เห็นได้ที่เดียว คือแผงเดาของสายลับ ระหว่างเล่นไม่มีรายชื่อโผล่ที่ไหนอีก */
 
-function crossKey() { return 'sf_cross_' + CODE + '_' + (VIEW ? VIEW.roundNo : 0); }
-
-function crossed() {
-  try { return JSON.parse(localStorage.getItem(crossKey()) || '[]'); } catch (e) { return []; }
-}
-
-function toggleCross(i) {
-  var c = crossed();
-  var at = c.indexOf(i);
-  if (at >= 0) c.splice(at, 1); else c.push(i);
-  try { localStorage.setItem(crossKey(), JSON.stringify(c)); } catch (e) {}
-  return at < 0;
-}
-
-function buildLocs(container, strikeable) {
-  var c = crossed();
-  container.innerHTML = '';
+function buildGuessList() {
+  var box = $('guess-list');
+  box.innerHTML = '';
   LOCS.forEach(function (name, i) {
     var b = document.createElement('button');
-    b.className = 'loc' + (strikeable && c.indexOf(i) >= 0 ? ' off' : '');
+    b.className = 'loc';
     b.textContent = name;
-    b.onclick = strikeable
-      ? function () { b.classList.toggle('off', toggleCross(i)); }
-      : function () {
-          ask('เดาว่าเป็น "' + name + '" ใช่ไหม? ผิดแล้วแพ้ทันที', function () {
-            haptic('heavy');
-            hideGuess();
-            act('guess', { code: CODE, locIdx: i }).then(apply, fail);
-          });
-        };
-    container.appendChild(b);
+    b.onclick = function () {
+      ask('เดาว่าเป็น "' + name + '" ใช่ไหม? ผิดแล้วแพ้ทันที', function () {
+        haptic('heavy');
+        act('guess', { code: CODE, locIdx: i }).then(apply, fail);
+      });
+    };
+    box.appendChild(b);
   });
 }
 
-function openGuess() {
-  buildLocs($('guess-list'), false);
-  $('guess-sheet').classList.add('show');
-  mainButton(null);
-  backButton(closeGuess);
-}
-
-/** ปิดแผงเฉย ๆ ไม่วาดจอใหม่ — ใช้ตอนถูกเรียกจากใน render() เพื่อกันวนซ้ำ */
-function hideGuess() {
-  $('guess-sheet').classList.remove('show');
-  backButton(null);
-}
-
-function closeGuess() {
-  hideGuess();
-  if (VIEW) { lastKey = ''; render(); }
+/** เปิดตัว — ประกาศให้ทั้งห้องรู้ทันที และย้อนกลับไม่ได้ จึงถามยืนยันก่อน */
+function revealSelf() {
+  ask('เปิดตัวเลยไหม? ทุกคนจะรู้ทันทีว่าคุณคือสายลับ และย้อนกลับไม่ได้', function () {
+    haptic('heavy');
+    act('reveal', { code: CODE }).then(apply, fail);
+  });
 }
 
 /* ---------- นาฬิกา ---------- */
@@ -741,6 +732,8 @@ setInterval(function () {
     }
   } else if (VIEW.phase === 'vote' && VIEW.vote) {
     paintClock($('vote-timer'), $('vote-bar'), VIEW.vote.endsAt, 60000, 10);
+  } else if (VIEW.phase === 'guessing' && VIEW.guess) {
+    paintClock($('guess-timer'), $('guess-bar'), VIEW.guess.endsAt, 60000, 10);
   }
 }, 250);
 
@@ -863,9 +856,12 @@ $('btn-start').onclick = $('btn-next').onclick = startRound;
 $('btn-share').onclick = share;
 $('btn-vote-yes').onclick = function () { castVote(true); };
 $('btn-vote-no').onclick = function () { castVote(false); };
-$('btn-open-guess').onclick = openGuess;
-$('btn-guess-vote').onclick = openGuess;
-$('btn-guess-cancel').onclick = closeGuess;
+$('btn-open-guess').onclick = revealSelf;
+$('secret').onclick = function () {
+  haptic();
+  showSecret(!$('secret').classList.contains('open'));
+};
+$('btn-guess-vote').onclick = revealSelf;
 $('btn-cancel-deal').onclick = function () {
   ask('ยกเลิกการแจกไพ่ กลับไปล็อบบี้?', function () {
     act('canceldeal', { code: CODE }).then(apply, fail);

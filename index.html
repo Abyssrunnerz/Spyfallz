@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=13">
+<link rel="stylesheet" href="./style.css?v=14">
 </head>
 <body>
 
@@ -110,11 +110,18 @@
     <div class="bar"><div id="timer-bar" class="bar-fill"></div></div>
   </div>
 
-  <div id="secret" class="secret">
-    <div class="secret-label">การ์ดของคุณ</div>
-    <div id="secret-main" class="secret-main">—</div>
-    <div id="secret-role" class="secret-role"></div>
-  </div>
+  <button id="secret" type="button" class="secret" aria-label="การ์ดของคุณ">
+    <div class="secret-inner">
+      <div class="secret-face secret-back">
+        <div class="secret-peek">แตะเพื่อดูการ์ดของคุณ</div>
+      </div>
+      <div id="secret-front" class="secret-face secret-front">
+        <div class="secret-label">การ์ดของคุณ</div>
+        <div id="secret-main" class="secret-main">—</div>
+        <div id="secret-role" class="secret-role"></div>
+      </div>
+    </div>
+  </button>
 
   <p id="first-asker" class="hint"></p>
   <div id="game-notice" class="notice"></div>
@@ -127,11 +134,6 @@
 
   <div id="game-actions" class="fallback-actions">
     <button id="btn-open-guess" class="btn btn-primary">เปิดตัว &amp; เดาสถานที่</button>
-  </div>
-
-  <div class="card">
-    <div class="card-title">สถานที่ทั้งหมด <span class="badge">แตะเพื่อขีดฆ่า</span></div>
-    <div id="loc-list" class="locs"></div>
   </div>
 
   <button id="btn-leave-game" class="btn btn-ghost">ออกจากห้อง</button>
@@ -158,6 +160,25 @@
   <p id="vote-waiting" class="hint"></p>
 </section>
 
+<!-- ---------- สายลับเปิดตัวแล้ว ทุกคนเห็นจอนี้ ---------- -->
+<section id="screen-guess" class="screen">
+  <div class="clock">
+    <div id="guess-timer" class="clock-value sm">--</div>
+    <div class="bar"><div id="guess-bar" class="bar-fill"></div></div>
+  </div>
+
+  <div class="card unmask">
+    <div id="guess-av" class="unmask-av"></div>
+    <h2 id="guess-title" class="unmask-title">—</h2>
+    <p id="guess-sub" class="unmask-sub"></p>
+  </div>
+
+  <div id="guess-pick" class="card">
+    <div class="card-title">เลือกสถานที่ <span class="badge">เลือกแล้วจบรอบทันที</span></div>
+    <div id="guess-list" class="locs"></div>
+  </div>
+</section>
+
 <!-- ---------- ผลรอบ ---------- -->
 <section id="screen-result" class="screen">
   <div class="verdict">
@@ -179,18 +200,9 @@
   <button id="btn-leave-result" class="btn btn-ghost">ออกจากห้อง</button>
 </section>
 
-<!-- ---------- แผงให้สายลับเลือกเดา ---------- -->
-<div id="guess-sheet" class="sheet">
-  <div class="sheet-inner">
-    <div class="sheet-title">เดาสถานที่ — ถูก = ชนะทันที · ผิด = แพ้ทันที</div>
-    <div id="guess-list" class="locs"></div>
-    <button id="btn-guess-cancel" class="btn btn-ghost">ยกเลิก</button>
-  </div>
-</div>
-
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=13"></script>
+<script src="./app.js?v=14"></script>
 </body>
 </html>

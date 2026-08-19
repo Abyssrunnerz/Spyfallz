@@ -79,6 +79,8 @@ body {
 .btn-primary { background: var(--red); color: #fff; font-weight: 700; }
 .btn-outline { background: transparent; color: var(--red); border: 1px solid var(--red); font-weight: 600; }
 .btn-ghost   { background: transparent; color: var(--muted); font-weight: 500; }
+/* การกระทำที่ย้อนกลับไม่ได้ ต้องดูต่างจากปุ่มทั่วไปตั้งแต่ก่อนกด */
+.btn-danger  { background: var(--red-grad); color: #fff; font-weight: 700; border: 1px solid var(--red); }
 .btn-sm { width: auto; margin: 0 auto; padding: 8px 18px; font-size: 14px; }
 
 /* ---------- ฟอร์ม ---------- */
@@ -156,17 +158,39 @@ body {
 .pbtn:active { transform: scale(.96); border-color: var(--red); background: var(--red-bg); }
 .pbtn.self, .pbtn[disabled] { opacity: .35; pointer-events: none; }
 
-/* ---------- การ์ดลับ ---------- */
+/* ---------- การ์ดลับตอนเล่น ----------
+ * ปิดไว้ก่อน แตะเปิดดูตอนลืม แล้วแตะปิดเก็บ กันคนข้าง ๆ เห็น */
 .secret {
-  text-align: center; padding: 26px 18px; border-radius: var(--r-lg); margin: 12px 0;
+  display: block; width: 100%; margin: 12px 0; padding: 0; border: 0;
+  background: none; cursor: pointer; perspective: 1200px;
+  font: inherit; color: inherit; text-align: center;
+}
+.secret-inner {
+  position: relative; min-height: 132px;
+  transform-style: preserve-3d; transition: transform .55s cubic-bezier(.2, .8, .2, 1);
+}
+.secret.open .secret-inner { transform: rotateY(180deg); }
+.secret-face {
+  position: absolute; inset: 0; backface-visibility: hidden;
+  border-radius: var(--r-lg); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 20px 18px;
+}
+.secret-back { justify-content: flex-end; padding-bottom: 14px; }
+.secret-peek {
+  font-size: 13px; font-weight: 700; letter-spacing: .04em; color: #f7f0dc;
+  padding: 8px 14px; border-radius: 999px;
+  background: rgba(14, 23, 48, .9); border: 1px solid rgba(242, 197, 61, .45);
+}
+.secret-front {
+  transform: rotateY(180deg);
   background: var(--card); border: 1px solid var(--line);
 }
 .secret-label { font-size: 11px; color: var(--muted); letter-spacing: 1.6px; font-weight: 700; text-transform: uppercase; }
 .secret-main { font-size: 28px; font-weight: 800; margin: 8px 0 4px; }
 .secret-role { color: var(--dim); font-size: 15px; }
-.secret.is-spy { background: var(--red-grad); border-color: var(--red); }
-.secret.is-spy .secret-label { color: var(--red-pale); }
-.secret.is-spy .secret-role { color: rgba(255, 255, 255, .85); }
+.secret-front.is-spy { background: var(--red-grad); border-color: var(--red); }
+.secret-front.is-spy .secret-label { color: var(--red-pale); }
+.secret-front.is-spy .secret-role { color: rgba(255, 255, 255, .85); }
 
 /* ---------- นาฬิกา ---------- */
 .clock { margin: 4px 0 14px; }
@@ -192,7 +216,6 @@ body {
 /* ---------- โหวต ---------- */
 .vote-card { text-align: center; padding: 24px 18px; }
 .vote-avs { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 14px; }
-.vote-vs { color: var(--red); font-size: 20px; font-weight: 800; }
 .vote-text { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
 
 /* ---------- ผลรอบ ---------- */
@@ -208,20 +231,13 @@ body {
 .verdict-title { font-size: 29px; font-weight: 800; margin: 16px 0 6px; letter-spacing: -.3px; }
 .verdict-sub { color: var(--dim); font-size: 14px; margin: 0; max-width: 34ch; margin-inline: auto; }
 
-/* ---------- แผงเดาสถานที่ ---------- */
-.sheet { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, .78); z-index: 20; }
-.sheet.show { display: block; }
-.sheet-inner {
-  position: absolute; left: 0; right: 0; bottom: 0;
-  max-height: 86vh; overflow-y: auto;
-  background: var(--bg); border-top: 1px solid rgba(239, 68, 68, .4);
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
-  animation: up .22s ease-out;
-}
-@keyframes up { from { transform: translateY(30px); opacity: .6; } to { transform: none; opacity: 1; } }
-.sheet-title { font-size: 13px; color: var(--muted); margin-bottom: 14px; text-align: center; font-weight: 600; }
-.sheet .loc { font-size: 14px; padding: 10px 15px; }
+/* ---------- จอสายลับเปิดตัว ----------
+ * เปิดตัวแล้วย้อนไม่ได้ จึงเป็นจอเต็ม ไม่ใช่แผงลอยที่แตะข้าง ๆ แล้วหลุด */
+.unmask { text-align: center; padding: 24px 18px; border: 1px solid rgba(239, 68, 68, .45); }
+.unmask-av { display: flex; justify-content: center; margin-bottom: 12px; }
+.unmask-title { font-size: 22px; font-weight: 800; margin: 0 0 6px; letter-spacing: -.2px; }
+.unmask-sub { color: var(--muted); font-size: 13.5px; margin: 0; }
+#guess-list .loc { font-size: 14px; padding: 10px 15px; }
 
 /* ---------- toast ---------- */
 .toast {
@@ -292,9 +308,8 @@ body::before {
 }
 .code-value { font-variant-numeric: tabular-nums; }
 
-/* การ์ดลับ: เพิ่มกรอบในให้ดูเป็นเอกสารลับ */
-.secret { position: relative; }
-.secret::after {
+/* หน้าการ์ดลับ: เพิ่มกรอบในให้ดูเป็นเอกสารลับ */
+.secret-front::after {
   content: ''; position: absolute; inset: 7px; border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, .07); pointer-events: none;
 }
@@ -327,36 +342,67 @@ body::before {
 
 .deal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
 
-/* ใช้ 3D flip จริง ไม่ใช่สลับรูป จะได้รู้สึกเหมือนพลิกไพ่ */
-.card { aspect-ratio: 3 / 4; perspective: 900px; background: none; border: 0; padding: 0; cursor: pointer; }
+/* ใช้ 3D flip จริง ไม่ใช่สลับรูป จะได้รู้สึกเหมือนพลิกไพ่
+ * ต้องเป็นชื่อคลาสของตัวเอง ห้ามใช้ .card ซ้ำกับกล่องเนื้อหาทั่วแอป
+ * ไม่งั้นกฎนี้จะไปทับกล่องทุกใบ (พื้นหลังหาย + สูงตาม aspect-ratio 3/4)
+ * font/color ต้องระบุเอง เพราะ button ไม่สืบทอดมาให้ */
+.deal-card {
+  aspect-ratio: 3 / 4; perspective: 900px; background: none; border: 0; padding: 0;
+  cursor: pointer; font: inherit; color: var(--text);
+}
 .card-inner {
   position: relative; width: 100%; height: 100%;
   transform-style: preserve-3d; transition: transform .55s cubic-bezier(.2, .8, .2, 1);
 }
-.card.flipped .card-inner { transform: rotateY(180deg); }
+.deal-card.flipped .card-inner { transform: rotateY(180deg); }
 .card-face {
   position: absolute; inset: 0; backface-visibility: hidden;
   border-radius: var(--r-lg); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 6px; padding: 8px; text-align: center;
 }
 
-/* หลังไพ่: ลายวงเลนส์เดียวกับตราของเกม */
-.card-back {
+/* หลังไพ่: ตราสายลับบนพื้นน้ำเงินตาข่ายบิด ในกรอบทอง
+ *
+ * แยกสองชั้นเพราะการ์ดมีสองสัดส่วน — ใบในกริดเป็นแนวตั้ง ใบตอนเล่นเป็นแนวนอนยาว
+ *   ตาข่าย  cover    ครอปได้ ไม่มีอะไรสำคัญให้เสีย
+ *   ตรา     contain  ตามความสูง จึงไม่เคยถูกครอปไม่ว่าการ์ดจะสัดส่วนไหน
+ * ถ้ารวมเป็นไฟล์เดียวแล้ว cover ตราจะโดนตัดหัวตัดท้ายบนใบแนวนอน
+ * ขอบทองวาดด้วย inset shadow ไม่ใช่ border จะได้ไม่กินพื้นที่ภาพ */
+.card-back, .secret-back {
   background:
-    radial-gradient(circle at 50% 46%, transparent 15px, var(--red-bg) 16px, transparent 17px),
-    radial-gradient(circle at 50% 46%, var(--red) 5px, transparent 6px),
-    var(--card);
-  border: 1px solid var(--line);
+    url("./card-mark.svg?v=1") center / auto 62% no-repeat,
+    url("./card-mesh.svg?v=1") center / cover,
+    #1b2a5e;
+  box-shadow:
+    inset 0 0 0 1.6px rgba(242, 197, 61, .9),
+    inset 0 0 0 5px rgba(19, 31, 69, .95),
+    inset 0 0 0 5.9px rgba(242, 197, 61, .45);
 }
-.card-no { position: absolute; bottom: 8px; font-size: 11px; color: var(--muted); font-weight: 700; }
-.card:not(.taken):active .card-inner { transform: scale(.94); }
+/* การ์ดตอนเล่นเตี้ยและกว้าง ดันตราขึ้นบนเพื่อเปิดที่ให้ป้าย "แตะเพื่อดู" ด้านล่าง
+ * ต้องอยู่หลัง shorthand background ข้างบน ไม่งั้น size/position โดนรีเซ็ต */
+.secret-back { background-size: auto 46%, cover; background-position: center 18%, center; }
+
+.card-no {
+  position: absolute; bottom: 7px; font-size: 11px; font-weight: 700;
+  color: rgba(242, 197, 61, .8); text-shadow: 0 1px 3px #000;
+}
+.deal-card:not(.taken):active .card-inner { transform: scale(.94); }
 
 /* ใบที่คนอื่นถือไปแล้ว */
-.card.taken .card-back { border-color: rgba(255, 255, 255, .14); opacity: .55; }
-.card.taken { cursor: default; }
-.card-owner { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.deal-card.taken .card-back {
+  filter: grayscale(.4) brightness(.65);
+  background-image: url("./card-mesh.svg?v=1");   /* ทิ้งชั้นตรา ให้ชื่อเจ้าของอ่านออก */
+  background-size: cover;
+}
+.deal-card.taken { cursor: default; }
+/* ชื่อเจ้าของใบ ต้องมีฉากรองไม่งั้นจมลายไฟ */
+.card-owner {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 7px 9px; border-radius: 11px; background: rgba(14, 23, 48, .8);
+  border: 1px solid rgba(242, 197, 61, .35);
+}
 .card-owner .av { width: 30px; height: 30px; flex-basis: 30px; font-size: 13px; }
-.card-owner span { font-size: 10.5px; color: var(--dim); max-width: 74px;
+.card-owner span { font-size: 10.5px; color: #f7f0dc; max-width: 74px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* หน้าไพ่ของเรา */
