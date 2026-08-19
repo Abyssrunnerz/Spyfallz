@@ -146,7 +146,11 @@ body {
 .gain { color: var(--green); font-size: 13px; font-weight: 700; }
 
 /* ---------- ตะแกรงผู้เล่น ---------- */
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+/* แถวเดียว — ชื่อคนไทย/อังกฤษยาว ๆ อ่านได้เต็มไม่ต้องตัด
+ * เดิมเป็น 2 คอลัมน์แล้วชื่อยาวดันปุ่มทะลุขอบจอ เพราะ track `1fr` มี min-width:auto ติดมา
+ * จึงหดต่ำกว่าความกว้างข้อความ nowrap ไม่ได้ ellipsis ที่ใส่ไว้เลยไม่เคยทำงาน
+ * minmax(0,1fr) + min-width:0 คือส่วนที่ปลดล็อกให้หดได้จริง */
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
 .pbtn {
   display: flex; align-items: center; gap: 9px;
   padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r);
@@ -154,7 +158,8 @@ body {
   font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; text-align: left;
   transition: border-color .15s, background .15s, transform .1s;
 }
-.pbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pbtn { min-width: 0; }
+.pbtn span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pbtn:active { transform: scale(.96); border-color: var(--red); background: var(--red-bg); }
 .pbtn.self, .pbtn[disabled] { opacity: .35; pointer-events: none; }
 

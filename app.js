@@ -426,11 +426,12 @@ function renderLobby(v) {
   var label = few ? 'ต้องมีอย่างน้อย 3 คน (ตอนนี้ ' + v.players.length + ')'
                   : (v.roundNo > 0 ? 'เริ่มรอบที่ ' + (v.roundNo + 1) : 'เริ่มเกม');
 
-  $('lobby-wait').textContent = isHost ? '' : 'รอหัวห้องกดเริ่มเกม';
+  // ใครก็ได้ในห้องกดเริ่มได้ ไม่ต้องรอหัวห้อง
+  $('lobby-wait').textContent = few ? '' : 'ใครก็ได้ในห้องกดเริ่มได้';
   $('btn-start').textContent = label;
   $('btn-start').disabled = few;
-  $('btn-start').style.display = isHost ? 'block' : 'none';
-  mainButton(isHost ? label : null, startRound, few);
+  $('btn-start').style.display = 'block';
+  mainButton(label, startRound, few);
 }
 
 /** เฟสแจกไพ่ — ไพ่คว่ำเท่าจำนวนคน แตะได้ใบเดียว พลิกแล้วเปลี่ยนไม่ได้ */
@@ -598,9 +599,9 @@ function renderVote(v) {
 }
 
 /**
- * สายลับเปิดตัวแล้ว — ทุกคนในห้องเห็นจอนี้พร้อมกัน
- * ไม่มีปุ่มถอย ไม่มี MainButton เพราะเปิดตัวแล้วย้อนกลับไม่ได้
- * สายลับต้องเลือกสถานที่ คนอื่นได้แต่ดูนาฬิกาเดิน
+ * สายลับกำลังทายสถานที่ — ทุกคนในห้องเห็นจอนี้พร้อมกัน
+ * ไม่มีปุ่มถอย ไม่มี MainButton เพราะถึงจุดนี้แล้วย้อนกลับไม่ได้ทั้งสองทาง
+ * เข้ามาได้สองทาง เปิดตัวเอง หรือโดนโหวตจับได้ ข้อความต่างกันเพราะเดิมพันต่างกัน
  */
 function renderGuess(v) {
   show('guess');
@@ -608,14 +609,23 @@ function renderGuess(v) {
   mainButton(null);
 
   var iAmSpy = (v.you === v.guess.spyId);
+  var caught = !!v.guess.caught;
+  var spy = nameOf(v.guess.spyId);
   var av = $('guess-av');
   av.innerHTML = '';
   av.appendChild(avOf(v.guess.spyId, true));
 
-  $('guess-title').textContent = iAmSpy ? 'คุณเปิดตัวแล้ว' : nameOf(v.guess.spyId) + ' คือสายลับ';
-  $('guess-sub').textContent = iAmSpy
-    ? 'เลือกสถานที่ให้ถูก — ถูก = ชนะทันที · ผิดหรือเลือกไม่ทัน = แพ้'
-    : 'เปิดตัวเองแล้ว กำลังเลือกสถานที่ — ถ้าเดาผิดหรือไม่ทัน ผู้เล่นชนะ';
+  if (caught) {
+    $('guess-title').textContent = iAmSpy ? 'คุณถูกจับได้' : 'จับได้! ' + spy + ' คือสายลับ';
+    $('guess-sub').textContent = iAmSpy
+      ? 'โอกาสสุดท้าย — ทายสถานที่ถูก พลิกกลับมาชนะทันที · ผิดหรือไม่ทัน แพ้'
+      : 'ยังไม่จบ ' + spy + ' ขอทายสถานที่แก้ตัว — ทายถูกพลิกกลับไปชนะได้';
+  } else {
+    $('guess-title').textContent = iAmSpy ? 'คุณเปิดตัวแล้ว' : spy + ' คือสายลับ';
+    $('guess-sub').textContent = iAmSpy
+      ? 'เลือกสถานที่ให้ถูก — ถูก = ชนะทันที · ผิดหรือเลือกไม่ทัน = แพ้'
+      : 'เปิดตัวเองแล้ว กำลังเลือกสถานที่ — ถ้าเดาผิดหรือไม่ทัน ผู้เล่นชนะ';
+  }
 
   $('guess-pick').style.display = iAmSpy ? 'block' : 'none';
   if (iAmSpy) buildGuessList();
@@ -628,9 +638,13 @@ function renderResult(v) {
   var spy = nameOf(res.spyId);
   // ฝั่งไหนชนะ ใช้บอกสีและสัญลักษณ์ ไม่ใช้ emoji
   var t = {
-    spy_caught:       ['players', 'ผู้เล่นชนะ', 'จับสายลับได้ — ' + spy + ' คือสายลับ · สถานที่คือ ' + res.location],
+    spy_caught:       ['players', 'ผู้เล่นชนะ', 'จับสายลับได้ — ' + spy +
+                       (res.guess ? ' ทายแก้ตัวผิด (ทาย ' + res.guess + ')' : ' ทายแก้ตัวไม่ทัน') +
+                       ' · สถานที่คือ ' + res.location],
     wrong_accusation: ['spy', 'สายลับชนะ', 'โหวตผิดคน ' + nameOf(res.targetId) + ' ไม่ใช่สายลับ — สายลับคือ ' + spy],
-    spy_guessed:      ['spy', 'สายลับชนะ', spy + ' เดาถูก: ' + res.location],
+    spy_guessed:      res.comeback
+      ? ['spy', 'สายลับพลิกกลับมาชนะ', spy + ' โดนจับได้ แต่ทายถูก: ' + res.location]
+      : ['spy', 'สายลับชนะ', spy + ' เดาถูก: ' + res.location],
     spy_wrong_guess:  ['players', 'ผู้เล่นชนะ', spy + ' เดาผิด (ทาย ' + res.guess + ') — ที่จริงคือ ' + res.location],
     spy_survived:     ['spy', 'สายลับรอด', 'หมดเวลา — สายลับคือ ' + spy + ' · สถานที่คือ ' + res.location],
     spy_no_guess:     ['players', 'ผู้เล่นชนะ', spy + ' เปิดตัวแล้วเลือกสถานที่ไม่ทัน — ที่จริงคือ ' + res.location]
@@ -674,13 +688,11 @@ function renderResult(v) {
     if (spyWon === iAmSpy) winSound(); else loseSound();
   }
 
-  var isHost = (v.you === v.hostId);
   var label = 'เริ่มรอบที่ ' + (v.roundNo + 1);
-  $('result-wait').textContent = isHost ? '' : 'รอหัวห้องเริ่มรอบต่อไป';
+  $('result-wait').textContent = 'ใครก็ได้ในห้องกดเริ่มรอบต่อไป';
   $('btn-next').textContent = label;
-  $('redeal-note').textContent = v.redealAt ? '' : '';
-  $('btn-next').style.display = isHost ? 'block' : 'none';
-  mainButton(isHost ? label : null, startRound);
+  $('btn-next').style.display = 'block';
+  mainButton(label, startRound);
 }
 
 /* ---------- รายชื่อสถานที่ ----------
@@ -720,9 +732,6 @@ setInterval(function () {
   if (!VIEW) return;
   if (VIEW.phase === 'dealing' && VIEW.deal) {
     paintClock($('deal-timer'), $('deal-bar'), VIEW.deal.endsAt, 30000, 10);
-  } else if (VIEW.phase === 'reveal' && VIEW.redealAt) {
-    var left = Math.max(0, Math.round((VIEW.redealAt - (Date.now() + SKEW)) / 1000));
-    $('redeal-note').textContent = 'แจกไพ่รอบใหม่ใน ' + left + ' วินาที';
   } else if (VIEW.phase === 'playing' && VIEW.round) {
     var left = paintClock($('timer'), $('timer-bar'), VIEW.round.endsAt, VIEW.minutes * 60000, 60);
     // เตือนครั้งเดียวต่อรอบ ตอนเข้าสู่นาทีสุดท้าย
