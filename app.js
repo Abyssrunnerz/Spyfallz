@@ -816,7 +816,7 @@ function createRoom() {
 
 function joinRoom(code) {
   if (!myName()) return;
-  code = (code || $('input-code').value).trim().toUpperCase();
+  code = cleanCode(code || $('input-code').value);
   if (code.length !== 4) { toast('รหัสห้องมี 4 ตัวอักษร'); return; }
   haptic();
   act('join', { code: code }).then(enter, fail);
@@ -839,11 +839,24 @@ function leaveRoom() {
 }
 
 /** ปุ่มหลักของหน้าแรกเปลี่ยนตามว่ากรอกรหัสห้องไว้หรือยัง */
+/** รหัสห้องที่ใช้ได้จริงจากสิ่งที่พิมพ์มา — A-Z 0-9 ตัวพิมพ์ใหญ่ ยาวไม่เกิน 4 */
+function cleanCode(raw) {
+  return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+}
+
+/**
+ * ปุ่มหลักของหน้าแรกต้องขยับตั้งแต่ตัวอักษรแรก
+ * ของเดิมสลับเป็น "เข้าร่วมห้อง" ต่อเมื่อครบ 4 ตัวเป๊ะ ระหว่างพิมพ์จึงยังเป็น "สร้างห้องใหม่"
+ * นอกจากไม่มีอะไรตอบสนอง ถ้าเผลอกดตอนรหัสยังไม่ครบจะกลายเป็นสร้างห้องใหม่ทันที
+ */
 function syncHomeButton() {
   if (CODE) return;
-  var code = $('input-code').value.trim().toUpperCase();
-  if (code.length === 4) mainButton('เข้าร่วมห้อง ' + code, function () { joinRoom(); });
-  else mainButton('สร้างห้องใหม่', createRoom);
+  var box = $('input-code');
+  var code = cleanCode(box.value);
+  if (box.value !== code) box.value = code;      // ให้สิ่งที่เห็นตรงกับสิ่งที่จะส่งจริง
+  if (!code) mainButton('สร้างห้องใหม่', createRoom);
+  else if (code.length < 4) mainButton('ใส่รหัสห้องให้ครบ 4 ตัว', function () { joinRoom(); }, true);
+  else mainButton('เข้าร่วมห้อง ' + code, function () { joinRoom(); });
 }
 
 function share() {
