@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=18">
+<link rel="stylesheet" href="./style.css?v=19">
 </head>
 <body>
 
@@ -52,8 +52,8 @@
     <ol class="steps">
       <li><b>3–12 คน</b> ทุกคนได้สถานที่และบทบาทเหมือนกัน ยกเว้นสายลับ 1 คนที่ไม่รู้อะไรเลย</li>
       <li><b>ผลัดกันถาม</b> คำถามที่พิสูจน์ว่าอีกฝ่ายรู้จักสถานที่ แต่ไม่เฉลยให้สายลับ</li>
-      <li><b>หมดเวลาแล้วโหวตพร้อมกันรอบเดียว</b> ว่าใครคือสายลับ ระหว่างเล่นไม่มีการกล่าวหา</li>
-      <li><b>สายลับ</b> เปิดตัวทายสถานที่ได้ตลอดเวลา ทายถูกก่อนหมดเวลาได้ 2 คะแนน</li>
+      <li><b>กล่าวหา</b> ได้คนละ 1 ครั้งต่อรอบ ถ้าเห็นด้วยเกินครึ่งและจับถูกตัว ผู้กล่าวหาได้ 2 คนโหวตถูกได้ 1</li>
+      <li><b>สายลับ</b> เปิดตัวทายสถานที่ได้ก่อนถูกกล่าวหา ทายถูกได้ 2 คะแนน · รอดจนหมดเวลาได้ 1</li>
     </ol>
   </div>
 </section>
@@ -124,7 +124,13 @@
   </button>
 
   <p id="first-asker" class="hint"></p>
-  <p id="game-hint" class="hint"></p>
+  <div id="game-notice" class="notice"></div>
+
+  <div class="card">
+    <div class="card-title">กล่าวหาผู้เล่น</div>
+    <div id="game-players" class="grid"></div>
+    <p id="accuse-hint" class="hint left"></p>
+  </div>
 
   <div id="game-actions" class="fallback-actions">
     <button id="btn-open-guess" class="btn btn-danger">เปิดตัว &amp; ทายสถานที่</button>
@@ -133,7 +139,7 @@
   <button id="btn-leave-game" class="btn btn-ghost">ออกจากห้อง</button>
 </section>
 
-<!-- ---------- โหวตตอนหมดเวลา ---------- -->
+<!-- ---------- โหวตกล่าวหา ---------- -->
 <section id="screen-vote" class="screen">
   <div class="clock">
     <div id="vote-timer" class="clock-value sm">--</div>
@@ -141,15 +147,15 @@
   </div>
 
   <div class="card unmask">
+    <div id="vote-av" class="unmask-av"></div>
     <h2 id="vote-title" class="unmask-title">—</h2>
     <p id="vote-sub" class="unmask-sub"></p>
   </div>
 
-  <div id="vote-pick" class="card">
-    <div class="card-title">เลือกหนึ่งคน <span class="badge">เลือกแล้วเปลี่ยนไม่ได้</span></div>
-    <div id="vote-players" class="grid"></div>
+  <div id="vote-actions" class="fallback-actions">
+    <button id="btn-vote-yes" class="btn btn-primary">ใช่ เขาคือสายลับ</button>
   </div>
-
+  <button id="btn-vote-no" class="btn btn-outline">ไม่ใช่</button>
   <p id="vote-progress" class="hint"></p>
 </section>
 
@@ -195,6 +201,6 @@
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=18"></script>
+<script src="./app.js?v=19"></script>
 </body>
 </html>
