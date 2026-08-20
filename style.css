@@ -82,6 +82,14 @@ body {
 /* การกระทำที่ย้อนกลับไม่ได้ ต้องดูต่างจากปุ่มทั่วไปตั้งแต่ก่อนกด */
 .btn-danger  { background: var(--red-grad); color: #fff; font-weight: 700; border: 1px solid var(--red); }
 .btn-sm { width: auto; margin: 0 auto; padding: 8px 18px; font-size: 14px; }
+/* ออกจากห้องเคยห่างจากเนื้อหาด้านบนแค่ 10px บนล็อบบี้กับจอผลรอบ จนกดพลาดบ่อย
+ * เว้นระยะให้เท่าความสูงปุ่มหนึ่งใบ แล้วคั่นเส้นไว้กลางช่องว่าง
+ * เส้นเป็น ::before ที่ pointer-events:none จึงไม่ขยายพื้นที่กดของปุ่ม */
+.btn-leave { margin-top: 44px; position: relative; font-size: 14px; }
+.btn-leave::before {
+  content: ''; position: absolute; left: 0; right: 0; top: -22px;
+  border-top: 1px solid var(--line); pointer-events: none;
+}
 
 /* ---------- ฟอร์ม ---------- */
 .field { display: block; margin: 16px 0 6px; }
