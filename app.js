@@ -532,9 +532,6 @@ function renderGame(v) {
   show('game');
   backButton(null);
   var r = v.round;
-  setNotice($('game-notice'), r.lastVote
-    ? 'โหวตไม่ผ่าน — ' + nameOf(r.lastVote.targetId) + ' รอดไป (เห็นด้วย ' + r.lastVote.yes + ' / ไม่เห็นด้วย ' + r.lastVote.no + ')'
-    : '');
 
   // การ์ดปิดไว้ก่อน เปิดดูเองได้ตอนลืม — ปิดกลับทุกครั้งที่ขึ้นรอบใหม่
   // เช็คด้วยเลขรอบ ไม่ใช่ทุกครั้งที่วาดจอ ไม่งั้นการ์ดจะหุบใส่หน้าคนที่กำลังอ่าน
@@ -547,55 +544,55 @@ function renderGame(v) {
     : 'บทบาท: ' + r.yourRole;
 
   $('first-asker').textContent = nameOf(r.firstAskerId) + ' เป็นคนถามก่อน';
-
-  var grid = $('game-players');
-  grid.innerHTML = '';
-  v.players.forEach(function (p) {
-    var b = document.createElement('button');
-    b.className = 'pbtn' + (p.id === v.you ? ' self' : '');
-    b.appendChild(avEl(p.name, false, p.av));
-    var nm = document.createElement('span');
-    nm.textContent = p.name;
-    b.appendChild(nm);
-    b.disabled = !r.canAccuse || p.id === v.you;
-    b.onclick = function () {
-      ask('กล่าวหา ' + p.name + ' ว่าเป็นสายลับ?', function () {
-        haptic('medium');
-        act('accuse', { code: CODE, targetId: p.id }).then(apply, fail);
-      });
-    };
-    grid.appendChild(b);
-  });
-  $('accuse-hint').textContent = r.canAccuse
-    ? 'กล่าวหาได้คนละ 1 ครั้งต่อรอบ'
-    : 'คุณใช้สิทธิ์กล่าวหาไปแล้วในรอบนี้';
+  $('game-hint').textContent = r.youAreSpy
+    ? 'เปิดตัวทายสถานที่ได้ตลอดเวลา ทายถูกก่อนหมดเวลาได้ 2 คะแนน'
+    : 'หมดเวลาแล้วทุกคนจะโหวตพร้อมกันว่าใครคือสายลับ';
 
   $('btn-open-guess').style.display = r.youAreSpy ? 'block' : 'none';
-  mainButton(r.youAreSpy ? 'เปิดตัว & เดาสถานที่' : null, revealSelf);
+  mainButton(r.youAreSpy ? 'เปิดตัว & ทายสถานที่' : null, revealSelf);
 }
 
+/**
+ * โหวตตอนหมดเวลา — ทุกคนที่ไม่ใช่สายลับเลือกหนึ่งคน กดได้ครั้งเดียว
+ * ไม่โชว์ว่าใครโหวตใคร โชว์แค่จำนวน ไม่งั้นคนกดทีหลังจะโหวตตามคนแรก
+ */
 function renderVote(v) {
   show('vote');
   backButton(null);
+  mainButton(null);
   var vote = v.vote;
+  var done = !!vote.yourVote;
 
-  // ไม่เปิดเผยผู้กล่าวหา แสดงแค่คนที่ถูกกล่าวหา
-  var avs = $('vote-avs');
-  avs.innerHTML = '';
-  avs.appendChild(avOf(vote.targetId, true));
+  $('vote-title').textContent = vote.youAreVoter ? 'ใครคือสายลับ?' : 'คุณคือสายลับ';
+  $('vote-sub').textContent = !vote.youAreVoter
+    ? 'รอดูว่าเสียงส่วนใหญ่จะชี้มาที่คุณไหม ถ้าโหวตผิดคน คุณได้ 1 คะแนน'
+    : done ? 'คุณโหวต ' + nameOf(vote.yourVote) + ' ไปแล้ว รอคนอื่นให้ครบ'
+           : 'หมดเวลาแล้ว เลือกคนที่คิดว่าเป็นสายลับ เลือกได้ครั้งเดียว';
 
-  $('vote-text').textContent = 'มีคนกล่าวหา ' + nameOf(vote.targetId) + ' ว่าเป็นสายลับ';
-  $('vote-progress').textContent = 'โหวตแล้ว ' + vote.voted + '/' + (v.players.length - 1) + ' คน';
+  var picking = vote.youAreVoter && !done;
+  $('vote-pick').style.display = picking ? 'block' : 'none';
+  if (picking) {
+    var grid = $('vote-players');
+    grid.innerHTML = '';
+    v.players.forEach(function (p) {
+      if (p.id === v.you) return;              // โหวตตัวเองไม่ได้
+      var b = document.createElement('button');
+      b.className = 'pbtn';
+      b.appendChild(avEl(p.name, false, p.av));
+      var nm = document.createElement('span');
+      nm.textContent = p.name;
+      b.appendChild(nm);
+      b.onclick = function () {
+        ask('โหวต ' + p.name + ' ว่าเป็นสายลับ? เปลี่ยนไม่ได้', function () {
+          haptic('medium');
+          act('vote', { code: CODE, targetId: p.id }).then(apply, fail);
+        });
+      };
+      grid.appendChild(b);
+    });
+  }
 
-  var isTarget = (v.you === vote.targetId);
-  var done = vote.youVoted || isTarget;
-  $('btn-vote-yes').style.display = done ? 'none' : 'block';
-  $('btn-vote-no').style.display = done ? 'none' : 'block';
-  // เซิร์ฟเวอร์อนุญาตให้สายลับเดาระหว่างโหวตอยู่แล้ว ต้องมีปุ่มให้ด้วย
-  $('btn-guess-vote').style.display = (v.round && v.round.youAreSpy) ? 'block' : 'none';
-  $('vote-waiting').textContent = isTarget ? 'คุณคือคนที่ถูกกล่าวหา — รอผลโหวต'
-                                : done ? 'โหวตแล้ว รอคนอื่น...' : '';
-  mainButton(done ? null : 'ใช่ เขาคือสายลับ', function () { castVote(true); });
+  $('vote-progress').textContent = 'โหวตแล้ว ' + vote.voted + '/' + vote.total + ' คน';
 }
 
 /**
@@ -616,15 +613,15 @@ function renderGuess(v) {
   av.appendChild(avOf(v.guess.spyId, true));
 
   if (caught) {
-    $('guess-title').textContent = iAmSpy ? 'คุณถูกจับได้' : 'จับได้! ' + spy + ' คือสายลับ';
+    $('guess-title').textContent = iAmSpy ? 'โหวตจับคุณได้' : 'โหวตถูก! ' + spy + ' คือสายลับ';
     $('guess-sub').textContent = iAmSpy
-      ? 'โอกาสสุดท้าย — ทายสถานที่ถูก พลิกกลับมาชนะทันที · ผิดหรือไม่ทัน แพ้'
-      : 'ยังไม่จบ ' + spy + ' ขอทายสถานที่แก้ตัว — ทายถูกพลิกกลับไปชนะได้';
+      ? 'โอกาสสุดท้าย — ทายถูกได้ 1 คะแนน พลิกกลับมาชนะ · ผิดหรือไม่ทัน แพ้'
+      : 'ยังไม่จบ ' + spy + ' ขอทายสถานที่แก้ตัว — ถ้าทายผิด คนที่โหวตถูกได้คนละ 1 คะแนน';
   } else {
-    $('guess-title').textContent = iAmSpy ? 'คุณเปิดตัวแล้ว' : spy + ' คือสายลับ';
+    $('guess-title').textContent = iAmSpy ? 'คุณเปิดตัวแล้ว' : spy + ' เปิดตัวว่าเป็นสายลับ';
     $('guess-sub').textContent = iAmSpy
-      ? 'เลือกสถานที่ให้ถูก — ถูก = ชนะทันที · ผิดหรือเลือกไม่ทัน = แพ้'
-      : 'เปิดตัวเองแล้ว กำลังเลือกสถานที่ — ถ้าเดาผิดหรือไม่ทัน ผู้เล่นชนะ';
+      ? 'ทายถูกได้ 2 คะแนน ชนะทันที · ผิดหรือเลือกไม่ทัน = แพ้'
+      : 'เปิดตัวเองแล้ว กำลังเลือกสถานที่ — ถ้าทายผิด ผู้เล่นชนะ';
   }
 
   $('guess-pick').style.display = iAmSpy ? 'block' : 'none';
@@ -638,16 +635,19 @@ function renderResult(v) {
   var spy = nameOf(res.spyId);
   // ฝั่งไหนชนะ ใช้บอกสีและสัญลักษณ์ ไม่ใช้ emoji
   var t = {
-    spy_caught:       ['players', 'ผู้เล่นชนะ', 'จับสายลับได้ — ' + spy +
+    spy_caught:       ['players', 'ผู้เล่นชนะ', 'โหวตจับสายลับได้ และ ' + spy +
                        (res.guess ? ' ทายแก้ตัวผิด (ทาย ' + res.guess + ')' : ' ทายแก้ตัวไม่ทัน') +
                        ' · สถานที่คือ ' + res.location],
-    wrong_accusation: ['spy', 'สายลับชนะ', 'โหวตผิดคน ' + nameOf(res.targetId) + ' ไม่ใช่สายลับ — สายลับคือ ' + spy],
+    spy_survived:     ['spy', 'สายลับรอด', (res.votedId
+                       ? 'เสียงส่วนใหญ่โหวต ' + nameOf(res.votedId) + ' ซึ่งไม่ใช่สายลับ'
+                       : 'เสียงแตก ไม่มีใครโดนโหวตมากที่สุดคนเดียว') +
+                       ' — สายลับคือ ' + spy + ' · สถานที่คือ ' + res.location],
     spy_guessed:      res.comeback
-      ? ['spy', 'สายลับพลิกกลับมาชนะ', spy + ' โดนจับได้ แต่ทายถูก: ' + res.location]
-      : ['spy', 'สายลับชนะ', spy + ' เดาถูก: ' + res.location],
-    spy_wrong_guess:  ['players', 'ผู้เล่นชนะ', spy + ' เดาผิด (ทาย ' + res.guess + ') — ที่จริงคือ ' + res.location],
-    spy_survived:     ['spy', 'สายลับรอด', 'หมดเวลา — สายลับคือ ' + spy + ' · สถานที่คือ ' + res.location],
-    spy_no_guess:     ['players', 'ผู้เล่นชนะ', spy + ' เปิดตัวแล้วเลือกสถานที่ไม่ทัน — ที่จริงคือ ' + res.location]
+      ? ['spy', 'สายลับพลิกกลับมาชนะ', spy + ' โดนโหวตจับได้ แต่ทายถูก: ' + res.location]
+      : ['spy', 'สายลับชนะ', spy + ' เปิดตัวเองแล้วทายถูก: ' + res.location],
+    spy_wrong_guess:  ['players', 'ผู้เล่นชนะ', spy + ' เปิดตัวเองแล้วทายผิด (ทาย ' + res.guess +
+                       ') — ที่จริงคือ ' + res.location],
+    spy_no_guess:     ['players', 'ผู้เล่นชนะ', spy + ' เปิดตัวเองแล้วทายไม่ทัน — สถานที่คือ ' + res.location]
   }[res.type] || ['none', 'จบรอบ', ''];
 
   var badge = $('result-emoji');
@@ -827,11 +827,6 @@ function startRound() {
   act('start', { code: CODE }).then(apply, fail);
 }
 
-function castVote(yes) {
-  haptic(yes ? 'medium' : 'light');
-  act('vote', { code: CODE, yes: yes }).then(apply, fail);
-}
-
 function leaveRoom() {
   ask('ออกจากห้อง?', function () {
     api('leave', { code: CODE }).then(goHome, function () { goHome(); });
@@ -876,14 +871,11 @@ $('btn-create').onclick = createRoom;
 $('btn-join').onclick = function () { joinRoom(); };
 $('btn-start').onclick = $('btn-next').onclick = startRound;
 $('btn-share').onclick = share;
-$('btn-vote-yes').onclick = function () { castVote(true); };
-$('btn-vote-no').onclick = function () { castVote(false); };
 $('btn-open-guess').onclick = revealSelf;
 $('secret').onclick = function () {
   haptic();
   showSecret(!$('secret').classList.contains('open'));
 };
-$('btn-guess-vote').onclick = revealSelf;
 $('btn-cancel-deal').onclick = function () {
   ask('ยกเลิกการแจกไพ่ กลับไปล็อบบี้?', function () {
     act('canceldeal', { code: CODE }).then(apply, fail);
