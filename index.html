@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=21">
+<link rel="stylesheet" href="./style.css?v=22">
 </head>
 <body>
 
@@ -178,6 +178,34 @@
   </div>
 </section>
 
+<!-- ---------- เข้ามากลางเกม นั่งรอรอบหน้า ---------- -->
+<section id="screen-wait" class="screen">
+  <div class="code-panel">
+    <div class="code-label">รหัสห้อง</div>
+    <div id="wait-code" class="code-value">----</div>
+  </div>
+
+  <div class="card unmask">
+    <h2 class="unmask-title">รอรอบถัดไป</h2>
+    <p id="wait-sub" class="unmask-sub"></p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">กำลังเล่นอยู่ <span id="wait-count" class="badge"></span></div>
+    <ul id="wait-players" class="list"></ul>
+  </div>
+
+  <div id="wait-queue-card" class="card">
+    <div class="card-title">รออยู่ด้วยกัน</div>
+    <ul id="wait-queue" class="list"></ul>
+  </div>
+
+  <div id="wait-actions" class="fallback-actions">
+    <button id="btn-wait-start" class="btn btn-primary">เริ่มรอบต่อไป</button>
+  </div>
+  <button id="btn-leave-wait" class="btn btn-ghost btn-leave">ออกจากห้อง</button>
+</section>
+
 <!-- ---------- ผลรอบ ---------- -->
 <section id="screen-result" class="screen">
   <div class="verdict">
@@ -201,6 +229,6 @@
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=21"></script>
+<script src="./app.js?v=22"></script>
 </body>
 </html>

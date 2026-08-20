@@ -149,7 +149,7 @@ function fail(err) { toast(String((err && err.message) || err)); }
 /* ---------- หน้าจอ ---------- */
 
 function show(name) {
-  ['home', 'lobby', 'deal', 'game', 'vote', 'guess', 'result'].forEach(function (s) {
+  ['home', 'lobby', 'deal', 'game', 'vote', 'guess', 'wait', 'result'].forEach(function (s) {
     $('screen-' + s).classList.toggle('active', s === name);
   });
   window.scrollTo(0, 0);
@@ -371,6 +371,10 @@ function goHome() {
 
 function render() {
   var v = VIEW;
+
+  // คนที่เข้ามากลางเกมยังไม่มีข้อมูลรอบ ต้องดักก่อนทุกเฟส
+  // ไม่งั้นจะตกไปที่ goHome() แล้วโดนเด้งออกจากห้องทั้งที่รออยู่ดี ๆ
+  if (v.youAreWaiting) { renderWaiting(v); return; }
 
   // ข้อมูลรอบจะหายไปเมื่อเราไม่ได้อยู่ในห้องแล้ว (เช่นเพิ่งกดออก แล้ว broadcast ตามมา)
   // ถ้าวาดต่อจะ throw เพราะ v.round เป็น undefined
@@ -653,6 +657,53 @@ function renderGuess(v) {
   if (iAmSpy) buildGuessList();
 }
 
+/** เข้ามากลางเกม — เห็นแค่ว่าใครเล่นอยู่ ไม่เห็นความลับอะไรทั้งนั้น */
+function renderWaiting(v) {
+  show('wait');
+  backButton(null);
+
+  $('wait-code').textContent = v.code;
+  var ready = (v.phase === 'reveal' || v.phase === 'lobby');
+  $('wait-sub').textContent = ready
+    ? 'รอบนี้จบแล้ว กดเริ่มรอบต่อไปได้เลย คุณจะได้เล่นด้วย'
+    : 'เกมกำลังเล่นอยู่ พอจบรอบนี้คุณจะได้เล่นรอบถัดไป';
+
+  $('wait-count').textContent = v.players.length + ' คน';
+  var ul = $('wait-players');
+  ul.innerHTML = '';
+  v.players.forEach(function (p) {
+    var li = document.createElement('li');
+    li.appendChild(avEl(p.name, false, p.av));
+    var nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = p.name;
+    li.appendChild(nm);
+    var pts = document.createElement('span');
+    pts.className = 'pts';
+    pts.textContent = p.score;
+    li.appendChild(pts);
+    ul.appendChild(li);
+  });
+
+  // คนอื่นที่รออยู่ด้วยกัน ถ้ามีแค่เราคนเดียวก็ไม่ต้องโชว์การ์ดนี้
+  var queue = (v.waiting || []).filter(function (p) { return p.id !== v.you; });
+  $('wait-queue-card').style.display = queue.length ? 'block' : 'none';
+  var q = $('wait-queue');
+  q.innerHTML = '';
+  queue.forEach(function (p) {
+    var li = document.createElement('li');
+    li.appendChild(avEl(p.name, false, p.av));
+    var nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = p.name;
+    li.appendChild(nm);
+    q.appendChild(li);
+  });
+
+  $('btn-wait-start').style.display = ready ? 'block' : 'none';
+  mainButton(ready ? 'เริ่มรอบต่อไป' : null, startRound);
+}
+
 function renderResult(v) {
   show('result');
   backButton(null);
@@ -714,7 +765,10 @@ function renderResult(v) {
   }
 
   var label = 'เริ่มรอบที่ ' + (v.roundNo + 1);
-  $('result-wait').textContent = 'ใครก็ได้ในห้องกดเริ่มรอบต่อไป';
+  var queued = (v.waiting || []).length;
+  $('result-wait').textContent = queued
+    ? 'มีคนรอเล่นอยู่ ' + queued + ' คน — กดเริ่มรอบต่อไปแล้วเขาจะได้ลงเล่นด้วย'
+    : 'ใครก็ได้ในห้องกดเริ่มรอบต่อไป';
   $('btn-next').textContent = label;
   $('btn-next').style.display = 'block';
   mainButton(label, startRound);
@@ -917,7 +971,9 @@ $('btn-cancel-deal').onclick = function () {
     act('canceldeal', { code: CODE }).then(apply, fail);
   });
 };
-$('btn-leave').onclick = $('btn-leave-game').onclick = $('btn-leave-result').onclick = leaveRoom;
+$('btn-leave').onclick = $('btn-leave-game').onclick = $('btn-leave-result').onclick =
+  $('btn-leave-wait').onclick = leaveRoom;
+$('btn-wait-start').onclick = startRound;
 $('input-code').addEventListener('input', syncHomeButton);
 
 document.addEventListener('visibilitychange', function () {
