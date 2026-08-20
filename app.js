@@ -435,10 +435,16 @@ function renderLobby(v) {
 }
 
 /** เฟสแจกไพ่ — ไพ่คว่ำเท่าจำนวนคน แตะได้ใบเดียว พลิกแล้วเปลี่ยนไม่ได้ */
+var dealOpen = false;    // ใบของเราเปิดอยู่ไหมในเฟสแจกไพ่
+var dealRound = -1;      // ใบเปิดค้างของรอบไหน
+
 function renderDeal(v) {
   show('deal');
   backButton(null);
   mainButton(null);
+
+  // ขึ้นรอบใหม่ = ใบของเราคว่ำกลับเสมอ
+  if (dealRound !== v.roundNo) { dealRound = v.roundNo; dealOpen = false; }
 
   var d = v.deal;
   var picked = Object.keys(d.taken).length;
@@ -461,8 +467,11 @@ function dealCard(v, d, i) {
 
   var card = document.createElement('button');
   card.type = 'button';
-  card.className = 'deal-card' + (ownerId ? ' taken' : '') + (isMine ? ' flipped' : '');
-  card.disabled = !!ownerId || d.yours !== null;
+  // หยิบแล้วไพ่ไม่เปิดเอง — คว่ำไว้ก่อน แล้วแตะพลิกเปิด/ปิดเองได้ตลอด
+  // ใบของเราจึงยังกดได้เสมอ ต่างจากใบอื่นที่กดไม่ได้เมื่อมีคนถือหรือเราหยิบไปแล้ว
+  card.className = 'deal-card' + (ownerId && !isMine ? ' taken' : '') +
+                   (isMine ? ' mine' : '') + (isMine && dealOpen ? ' flipped' : '');
+  card.disabled = isMine ? false : (!!ownerId || d.yours !== null);
 
   var inner = document.createElement('div');
   inner.className = 'card-inner';
@@ -478,6 +487,11 @@ function dealCard(v, d, i) {
     nm.textContent = p ? p.name : nameOf(ownerId);
     who.appendChild(nm);
     back.appendChild(who);
+  } else if (isMine) {
+    var mine = document.createElement('div');
+    mine.className = 'card-mine';
+    mine.textContent = dealOpen ? 'แตะเพื่อปิด' : 'ใบของคุณ · แตะเพื่อดู';
+    back.appendChild(mine);
   } else {
     var no = document.createElement('div');
     no.className = 'card-no';
@@ -508,14 +522,18 @@ function dealCard(v, d, i) {
   inner.appendChild(front);
   card.appendChild(inner);
 
-  if (!card.disabled) {
+  if (isMine) {
+    card.onclick = function () {
+      haptic();
+      dealOpen = !dealOpen;                   // เก็บไว้ที่ตัวแปร ไม่ใช่ที่ DOM
+      card.classList.toggle('flipped', dealOpen);   // เพราะกริดถูกวาดใหม่ทุกครั้งที่มีคนหยิบ
+      var lbl = card.querySelector('.card-mine');
+      if (lbl) lbl.textContent = dealOpen ? 'แตะเพื่อปิด' : 'ใบของคุณ · แตะเพื่อดู';
+    };
+  } else if (!card.disabled) {
     card.onclick = function () {
       haptic('medium');
-      card.classList.add('flipped');          // พลิกทันที ไม่รอเซิร์ฟเวอร์
-      act('pick', { code: CODE, cardIdx: i }).then(apply, function (err) {
-        card.classList.remove('flipped');     // เซิร์ฟเวอร์ปฏิเสธ พลิกกลับ
-        fail(err);
-      });
+      act('pick', { code: CODE, cardIdx: i }).then(apply, fail);
     };
   }
   return card;

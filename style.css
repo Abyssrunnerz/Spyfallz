@@ -389,6 +389,22 @@ body::before {
   position: absolute; bottom: 7px; font-size: 11px; font-weight: 700;
   color: rgba(242, 197, 61, .8); text-shadow: 0 1px 3px #000;
 }
+/* ใบของเราตอนยังคว่ำ ต้องดูออกว่าใบไหนของเรา ถึงจะรู้ว่าแตะใบไหนเพื่อเปิดดู */
+.card-mine {
+  font-size: 10px; font-weight: 700; line-height: 1.35; text-align: center;
+  color: #f7f0dc; padding: 5px 8px; border-radius: 10px; max-width: 90%;
+  background: rgba(14, 23, 48, .85); border: 1px solid rgba(242, 197, 61, .55);
+}
+/* ใบของเรา: ทิ้งชั้นตราเหมือนใบที่มีคนถือ ป้ายจะได้ไม่ทับตรา และเน้นกรอบทองให้หนาขึ้น
+ * ต้องเขียน box-shadow ครบทุกชั้น เพราะ property นี้ทับทั้งก้อน ไม่ใช่ต่อท้าย */
+.deal-card.mine .card-back {
+  background-image: url("./card-mesh.svg?v=1");
+  background-size: cover;
+  box-shadow:
+    inset 0 0 0 2.5px rgba(242, 197, 61, 1),
+    inset 0 0 0 5.5px rgba(19, 31, 69, .95),
+    inset 0 0 0 6.4px rgba(242, 197, 61, .5);
+}
 .deal-card:not(.taken):active .card-inner { transform: scale(.94); }
 
 /* ใบที่คนอื่นถือไปแล้ว */
