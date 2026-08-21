@@ -381,7 +381,7 @@ body::before {
  * ขอบทองวาดด้วย inset shadow ไม่ใช่ border จะได้ไม่กินพื้นที่ภาพ */
 .card-back, .secret-back {
   background:
-    url("./card-mark.svg?v=1") center / auto 62% no-repeat,
+    url("./card-mark.svg?v=2") center / auto 62% no-repeat,
     url("./card-mesh.svg?v=1") center / cover,
     #1b2a5e;
   box-shadow:

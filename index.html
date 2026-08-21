@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=23">
+<link rel="stylesheet" href="./style.css?v=24">
 </head>
 <body>
 
@@ -22,8 +22,8 @@
       <circle cx="32" cy="32" r="6" class="dot"/>
       <path d="M32 1v10M32 53v10M1 32h10M53 32h10" class="ticks"/>
     </svg>
-    <h1 id="wordmark" class="wordmark">SPY<span>FALL</span></h1>
-    <p id="tagline" class="tagline">ทุกคนรู้ว่าอยู่ที่ไหน ยกเว้นสายลับหนึ่งคน</p>
+    <h1 class="wordmark">BOARD <span>GAME</span></h1>
+    <p class="tagline">เกมปาร์ตี้หลายเกมในแอปเดียว</p>
   </header>
 
   <div class="field">
@@ -53,7 +53,8 @@
   </div>
 
   <div class="card rules">
-    <div class="card-title">เล่นยังไง</div>
+    <div id="rules-title" class="card-title">เล่นยังไง</div>
+    <p id="rules-sub" class="hint left"></p>
     <ol id="home-rules" class="steps"></ol>
   </div>
 </section>
@@ -319,6 +320,6 @@
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=23"></script>
+<script src="./app.js?v=24"></script>
 </body>
 </html>
