@@ -444,3 +444,54 @@ body::before {
 .card-front.spy .role { color: rgba(255, 255, 255, .85); }
 
 .deal-clock { margin: 12px 0 16px; }
+
+/* ---------- หลายเกมในแอปเดียว ---------- */
+
+/* ตัวเลือกเกมบนหน้าแรก — สองบรรทัด ชื่อเกมกับจำนวนคน
+ * ใช้ minmax(0,1fr) เหมือน .grid เพราะชื่อเกมยาว ๆ จะดันช่องทะลุจอด้วยเหตุผลเดียวกัน */
+.games { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.game-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 6px; border: 1px solid var(--red); border-radius: var(--r);
+  background: var(--red); color: #fff;
+  font: inherit; cursor: pointer; text-align: center; min-width: 0;
+  transition: background .15s, border-color .15s, opacity .15s, transform .1s;
+}
+.game-chip:active { transform: scale(.95); }
+.game-chip.off { background: var(--card-2); border-color: var(--line); opacity: .55; }
+.game-chip .g-name {
+  font-size: 13px; font-weight: 800; line-height: 1.2;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.game-chip .g-min { font-size: 10px; font-weight: 600; opacity: .8; }
+
+/* แถบบอกว่าห้องนี้กำลังจะเล่นเกมอะไร */
+.gamebar {
+  padding: 9px 12px; margin-bottom: 11px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--card-2); color: var(--dim);
+  font-size: 12.5px; font-weight: 600; text-align: center;
+}
+
+/* ลำดับพูดของ Undercover */
+.list.order li { gap: 9px; }
+.ord {
+  width: 20px; height: 20px; flex: 0 0 20px;
+  display: grid; place-items: center;
+  border-radius: 9999px; background: var(--card-2); color: var(--muted);
+  font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+
+/* เลือกไปแล้ว — ต้องเห็นชัดว่ากดอันไหนไว้ ทั้งที่ปุ่มถูก disabled ทั้งแถว */
+.pbtn.picked { opacity: 1; border-color: var(--red); background: var(--red-bg); }
+.pbtn.picked[disabled] { opacity: .9; }
+
+.tag.out { background: rgba(255, 255, 255, .1); color: var(--muted); }
+
+/* มาสเตอร์ของอินไซเดอร์ — ทองแทนแดง เพราะเขาไม่ใช่ฝ่ายตรงข้าม แค่รู้คำ */
+.card-front.master, .secret-front.is-master {
+  background: linear-gradient(90deg, #78350f, #b45309); border-color: var(--gold);
+}
+.card-front.master .where, .secret-front.is-master .secret-main { color: #fff; }
+.card-front.master .role, .secret-front.is-master .secret-role { color: rgba(255, 255, 255, .85); }
+.secret-front.is-master .secret-label { color: var(--gold); }

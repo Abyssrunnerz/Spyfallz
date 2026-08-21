@@ -1,4 +1,8 @@
-/* Spyfall — ไคลเอนต์ Telegram Mini App
+/* Board Game — ไคลเอนต์ Telegram Mini App
+ *
+ * มีสามเกมอยู่ในแอปเดียว ห้องบอกเองว่าเป็นเกมอะไรผ่านฟิลด์ game
+ * จอที่ใช้ร่วมกันทุกเกม: หน้าแรก ล็อบบี้ แจกไพ่ นั่งรอ ผลรอบ
+ * จอเฉพาะเกมอยู่ใน GAME_UI ข้างล่าง เกมใหม่เพิ่มที่นั่นที่เดียว
  *
  * แก้บรรทัดเดียวนี้ถ้าย้ายแบ็กเอนด์
  * URL ของ Cloudflare Worker (ลงท้ายด้วย /)
@@ -16,7 +20,9 @@ var tg = window.Telegram && window.Telegram.WebApp;
 var inTelegram = !!(tg && tg.platform && tg.platform !== 'unknown');
 
 var ME = null;      // {uid, name, sig}
-var LOCS = [];      // ชื่อสถานที่ทั้งหมด
+var LOCS = [];      // ชื่อสถานที่ทั้งหมด (ของ Spyfall)
+var GAMES = [];     // รายชื่อเกมจากเซิร์ฟเวอร์ [{id,name,short,tagline,min,max}]
+var MY_GAME = 'spyfall';   // เกมที่จะใช้ตอนกดสร้างห้อง
 var INVITE = '';    // ลิงก์ฐานสำหรับชวนเพื่อน (t.me/<bot>/<app>)
 var VIEW = null;    // สถานะห้องล่าสุด
 var CODE = '';      // รหัสห้องที่อยู่
@@ -28,7 +34,7 @@ var wsRetry = null;    // ตัวจับเวลาต่อใหม่
 var wsTries = 0;       // ต่อไม่ติดมากี่ครั้งแล้ว ใช้ถ่วงเวลาแบบทวีคูณ
 var MY_AV = 0;         // รูปประจำตัวที่เลือกไว้ 0 = ใช้วงกลมตัวอักษร
 var AVATARS = 27;      // จำนวนรูปใน web/av/
-var warnedRound = -1;  // เตือนเสียงนาทีสุดท้ายไปแล้วในรอบไหน
+var warnedRound = '';  // เตือนเสียงนาทีสุดท้ายไปแล้วของช่วงไหน
 var soundedRound = -1; // เล่นเสียงผลรอบไปแล้วในรอบไหน
 
 var $ = function (id) { return document.getElementById(id); };
@@ -149,7 +155,8 @@ function fail(err) { toast(String((err && err.message) || err)); }
 /* ---------- หน้าจอ ---------- */
 
 function show(name) {
-  ['home', 'lobby', 'deal', 'game', 'vote', 'guess', 'wait', 'result'].forEach(function (s) {
+  ['home', 'lobby', 'deal', 'game', 'vote', 'guess',
+   'insider', 'hunt', 'clue', 'wait', 'result'].forEach(function (s) {
     $('screen-' + s).classList.toggle('active', s === name);
   });
   window.scrollTo(0, 0);
@@ -367,6 +374,129 @@ function goHome() {
   syncHomeButton();
 }
 
+/* ---------- ข้อมูลของแต่ละเกมฝั่งไคลเอนต์ ----------
+ *
+ * ชื่อ/คำโปรย/จำนวนคนขั้นต่ำสูงสุด มาจากเซิร์ฟเวอร์ (GAMES) ไม่เก็บซ้ำที่นี่
+ * ที่นี่เก็บเฉพาะสิ่งที่เป็นเรื่องของหน้าจอล้วน ๆ
+ *   wordmark  ชื่อบนหน้าแรก
+ *   rules     วิธีเล่นบนหน้าแรก
+ *   dealFace  หน้าไพ่ตอนจั่ว
+ *   render    วาดจอของเฟสเฉพาะเกม คืน true ถ้าวาดแล้ว
+ *   clock     นาฬิกาของเฟสปัจจุบัน
+ *   result    ข้อความสรุปผลรอบ
+ */
+
+var GAME_UI = {
+
+  /* ================= Spyfall ================= */
+  spyfall: {
+    wordmark: ['SPY', 'FALL'],
+    rules: [
+      '<b>3–12 คน</b> ทุกคนได้สถานที่และบทบาทเหมือนกัน ยกเว้นสายลับ 1 คนที่ไม่รู้อะไรเลย',
+      '<b>ผลัดกันถาม</b> คำถามที่พิสูจน์ว่าอีกฝ่ายรู้จักสถานที่ แต่ไม่เฉลยให้สายลับ',
+      '<b>กล่าวหา</b> ได้คนละ 1 ครั้งต่อรอบ ถ้าเห็นด้วยเกินครึ่งและจับถูกตัว ผู้กล่าวหาได้ 2 คนโหวตถูกได้ 1',
+      '<b>สายลับ</b> เปิดตัวทายสถานที่ได้ก่อนถูกกล่าวหา ทายถูกได้ 2 คะแนน · รอดจนหมดเวลาได้ 1'
+    ],
+    timeLabel: 'เวลาต่อรอบ',
+    dealFace: function (c) {
+      return c.spy
+        ? { cls: 'spy', main: 'คุณคือสายลับ', sub: 'อย่าให้ใครจับได้' }
+        : { main: c.location, sub: c.role };
+    },
+    render: function (v) {
+      if (v.phase === 'playing' && v.round) { renderGame(v); return true; }
+      if (v.phase === 'vote' && v.vote && v.round) { renderVote(v); return true; }
+      if (v.phase === 'guessing' && v.guess) { renderGuess(v); return true; }
+      return false;
+    },
+    clock: function (v) {
+      if (v.phase === 'dealing' && v.deal) return ['deal-timer', 'deal-bar', v.deal.endsAt, 30000, 10];
+      if (v.phase === 'playing' && v.round) return ['timer', 'timer-bar', v.round.endsAt, v.minutes * 60000, 60];
+      if (v.phase === 'vote' && v.vote) return ['vote-timer', 'vote-bar', v.vote.endsAt, 60000, 10];
+      if (v.phase === 'guessing' && v.guess) return ['guess-timer', 'guess-bar', v.guess.endsAt, 60000, 10];
+      return null;
+    },
+    result: spyfallResult
+  },
+
+  /* ================= อินไซเดอร์ ================= */
+  insider: {
+    wordmark: ['IN', 'SIDER'],
+    rules: [
+      '<b>4–12 คน</b> มาสเตอร์ 1 คนรู้คำและเปิดตัวตั้งแต่ต้น · อินไซเดอร์ 1 คนแอบรู้คำด้วยแต่ไม่มีใครรู้ว่าเป็นใคร',
+      '<b>ช่วยกันถาม</b> มาสเตอร์ตอบได้แค่ ใช่ / ไม่ใช่ / ไม่เกี่ยว จนกว่าจะมีคนพูดคำนั้นออกมาถูก',
+      '<b>ทายไม่ทันเวลา แพ้กันทั้งวง</b> รวมอินไซเดอร์ด้วย เขาจึงต้องแอบพาให้ทุกคนทายถูก',
+      '<b>ทายถูกแล้วหาตัว</b> เวลาคุยเท่ากับเวลาที่ใช้ถามไป · จับได้ทุกคนได้ 1 · จับไม่ได้ อินไซเดอร์ได้ 2'
+    ],
+    timeLabel: 'เวลาถามตอบ',
+    dealFace: function (c) {
+      if (c.role === 'master') {
+        return { cls: 'master', main: c.word, sub: 'คุณคือมาสเตอร์ · ตอบได้แค่ ใช่ / ไม่ใช่ / ไม่เกี่ยว' };
+      }
+      if (c.role === 'insider') {
+        return { cls: 'spy', main: c.word, sub: 'คุณคืออินไซเดอร์ · พาให้เขาทายถูกโดยไม่โดนจับ' };
+      }
+      return { main: 'คุณคือชาวบ้าน', sub: 'ยังไม่รู้คำ ต้องช่วยกันถามให้ออก' };
+    },
+    render: function (v) {
+      if (v.phase === 'asking' && v.round) { renderInsider(v); return true; }
+      if (v.phase === 'discuss' && v.vote && v.round) { renderInsiderVote(v); return true; }
+      if (v.phase === 'hunt' && v.hunt) { renderHunt(v); return true; }
+      if (v.phase === 'tiebreak' && v.tie) { renderTiebreak(v); return true; }
+      return false;
+    },
+    clock: function (v) {
+      if (v.phase === 'dealing' && v.deal) return ['deal-timer', 'deal-bar', v.deal.endsAt, 30000, 10];
+      if (v.phase === 'asking' && v.round) return ['ins-timer', 'ins-bar', v.round.endsAt, v.minutes * 60000, 60];
+      // เฟสคุยยาวไม่เท่ากันทุกรอบ (= เวลาที่ใช้ถามไป) เซิร์ฟเวอร์จึงส่งความยาวมาให้
+      // ถ้าใช้ 60 วิตายตัว แถบจะเต็ม 100% ค้างอยู่จนเหลือนาทีสุดท้าย
+      if (v.phase === 'discuss' && v.vote) {
+        return ['vote-timer', 'vote-bar', v.vote.endsAt, v.vote.total || 60000, 10];
+      }
+      if (v.phase === 'hunt' && v.hunt) return ['hunt-timer', 'hunt-bar', v.hunt.endsAt, 60000, 10];
+      if (v.phase === 'tiebreak' && v.tie) return ['hunt-timer', 'hunt-bar', v.tie.endsAt, 60000, 10];
+      return null;
+    },
+    result: insiderResult
+  },
+
+  /* ================= Undercover ================= */
+  undercover: {
+    wordmark: ['UNDER', 'COVER'],
+    rules: [
+      '<b>4–12 คน</b> ทุกคนได้คำมาคนละคำ ชาวบ้านได้คำเดียวกันหมด สายลับได้คำที่คล้ายแต่ไม่เหมือน',
+      '<b>ไม่มีใครรู้ว่าตัวเองเป็นฝ่ายไหน</b> ต้องฟังคำใบ้คนอื่นแล้วเดาเอาเองว่าคำของเราเป็นพวกมากหรือพวกน้อย',
+      '<b>ผลัดกันพูดคำใบ้คนละคำ</b> ห้ามพูดคำของตัวเองตรง ๆ ห้ามพูดซ้ำคนอื่น แล้วโหวตคัดออกทีละคน',
+      '<b>ชาวบ้านชนะ</b> เมื่อคัดสายลับออกได้หมด คนละ 1 คะแนน · <b>สายลับชนะ</b> เมื่อเหลือเท่าชาวบ้าน ได้ 2'
+    ],
+    timeLabel: 'เวลาต่อรอบคำใบ้',
+    dealFace: function (c) {
+      return { main: c.word, sub: 'ห้ามบอกใครว่าคำของคุณคืออะไร' };
+    },
+    render: function (v) {
+      if (v.phase === 'clue' && v.round && v.vote) { renderClue(v); return true; }
+      return false;
+    },
+    clock: function (v) {
+      if (v.phase === 'dealing' && v.deal) return ['deal-timer', 'deal-bar', v.deal.endsAt, 30000, 10];
+      if (v.phase === 'clue' && v.vote) return ['clue-timer', 'clue-bar', v.vote.endsAt, v.minutes * 60000, 60];
+      return null;
+    },
+    result: undercoverResult
+  }
+};
+
+/** โมดูลหน้าจอของห้องนี้ — ห้องเก่าที่ไม่มีฟิลด์ game ถือเป็น Spyfall */
+function ui(v) {
+  return GAME_UI[(v && v.game) || 'spyfall'] || GAME_UI.spyfall;
+}
+
+/** ข้อมูลเกมจากเซิร์ฟเวอร์ (ชื่อ จำนวนคน) — ยังไม่ได้โหลดก็คืนค่าพอใช้ได้ */
+function metaOf(id) {
+  for (var i = 0; i < GAMES.length; i++) if (GAMES[i].id === id) return GAMES[i];
+  return { id: id || 'spyfall', name: 'Spyfall', short: 'สายลับ', tagline: '', min: 3, max: 12 };
+}
+
 /* ---------- วาดหน้าจอ ---------- */
 
 function render() {
@@ -376,22 +506,23 @@ function render() {
   // ไม่งั้นจะตกไปที่ goHome() แล้วโดนเด้งออกจากห้องทั้งที่รออยู่ดี ๆ
   if (v.youAreWaiting) { renderWaiting(v); return; }
 
+  // เฟสที่ทุกเกมมีเหมือนกัน วาดที่เดียว
+  if (v.phase === 'lobby') { renderLobby(v); return; }
+  if (v.phase === 'dealing' && v.deal) { renderDeal(v); return; }
+  if (v.phase === 'reveal' && v.result) { renderResult(v); return; }
+
   // ข้อมูลรอบจะหายไปเมื่อเราไม่ได้อยู่ในห้องแล้ว (เช่นเพิ่งกดออก แล้ว broadcast ตามมา)
-  // ถ้าวาดต่อจะ throw เพราะ v.round เป็น undefined
-  if (v.phase === 'lobby') renderLobby(v);
-  else if (v.phase === 'dealing' && v.deal) renderDeal(v);
-  else if (v.phase === 'playing' && v.round) renderGame(v);
-  else if (v.phase === 'vote' && v.vote && v.round) renderVote(v);
-  else if (v.phase === 'guessing' && v.guess) renderGuess(v);
-  else if (v.phase === 'reveal' && v.result) renderResult(v);
-  else goHome();
+  // เกมวาดไม่ได้ก็แปลว่าไม่มีอะไรให้ดูแล้ว กลับหน้าแรก
+  if (!ui(v).render(v)) goHome();
 }
 
 function renderLobby(v) {
   show('lobby');
   backButton(null);
+  var g = metaOf(v.game);
   $('lobby-code').textContent = v.code;
-  $('lobby-count').textContent = v.players.length + '/12';
+  $('lobby-count').textContent = v.players.length + '/' + g.max;
+  $('lobby-game').textContent = g.name + ' — ' + g.tagline;
   setNotice($('lobby-notice'), v.notice);
 
   var isHost = (v.you === v.hostId);
@@ -415,6 +546,7 @@ function renderLobby(v) {
     ul.appendChild(li);
   });
 
+  $('minutes-row').previousElementSibling.textContent = ui(v).timeLabel;
   var row = $('minutes-row');
   row.innerHTML = '';
   [4, 6, 8, 10].forEach(function (m) {
@@ -426,8 +558,8 @@ function renderLobby(v) {
     row.appendChild(b);
   });
 
-  var few = v.players.length < 3;
-  var label = few ? 'ต้องมีอย่างน้อย 3 คน (ตอนนี้ ' + v.players.length + ')'
+  var few = v.players.length < g.min;
+  var label = few ? 'ต้องมีอย่างน้อย ' + g.min + ' คน (ตอนนี้ ' + v.players.length + ')'
                   : (v.roundNo > 0 ? 'เริ่มรอบที่ ' + (v.roundNo + 1) : 'เริ่มเกม');
 
   // ใครก็ได้ในห้องกดเริ่มได้ ไม่ต้องรอหัวห้อง
@@ -506,18 +638,15 @@ function dealCard(v, d, i) {
   var front = document.createElement('div');
   front.className = 'card-face card-front';
   if (isMine && d.card) {
+    // หน้าไพ่เป็นเรื่องของแต่ละเกม ที่นี่รู้แค่ว่ามีบรรทัดใหญ่กับบรรทัดเล็ก
+    var face = ui(v).dealFace(d.card);
+    if (face.cls) front.className += ' ' + face.cls;
     var where = document.createElement('div');
     where.className = 'where';
+    where.textContent = face.main;
     var role = document.createElement('div');
     role.className = 'role';
-    if (d.card.spy) {
-      front.className += ' spy';
-      where.textContent = 'คุณคือสายลับ';
-      role.textContent = 'อย่าให้ใครจับได้';
-    } else {
-      where.textContent = d.card.location;
-      role.textContent = d.card.role;
-    }
+    role.textContent = face.sub;
     front.appendChild(where);
     front.appendChild(role);
   }
@@ -618,6 +747,8 @@ function renderVote(v) {
     : done ? 'โหวตแล้ว รอคนอื่นให้ครบ'
            : 'เขาคือสายลับไหม? ต้องเห็นด้วย ' + vote.need + ' จาก ' + vote.eligible + ' เสียงถึงจะผ่าน';
 
+  // จอนี้ใช้ร่วมกับอินไซเดอร์ซึ่งเปลี่ยนข้อความปุ่มไป ต้องตั้งกลับทุกครั้ง
+  $('btn-vote-yes').textContent = 'ใช่ เขาคือสายลับ';
   $('btn-vote-yes').style.display = done ? 'none' : 'block';
   $('btn-vote-no').style.display = done ? 'none' : 'block';
   $('vote-progress').textContent = 'โหวตแล้ว ' + vote.voted + '/' + vote.eligible + ' คน';
@@ -655,6 +786,241 @@ function renderGuess(v) {
 
   $('guess-pick').style.display = iAmSpy ? 'block' : 'none';
   if (iAmSpy) buildGuessList();
+}
+
+/* ================= อินไซเดอร์ ================= */
+
+/**
+ * เฟสถามตอบ — มาสเตอร์เปิดเผยตัวตั้งแต่ต้น
+ * ปุ่มชี้ว่าใครทายคำถูกมีเฉพาะมาสเตอร์ เพราะมีเขาคนเดียวที่รู้ว่าคำนั้นถูกไหม
+ */
+function renderInsider(v) {
+  show('insider');
+  backButton(null);
+  var r = v.round;
+
+  if (secretRound !== v.roundNo) { secretRound = v.roundNo; insSecret(false); }
+
+  var iAmMaster = r.youAreMaster;
+  $('ins-front').classList.toggle('is-spy', r.youAreInsider);
+  $('ins-front').classList.toggle('is-master', iAmMaster);
+  $('ins-main').textContent = r.word || 'คุณคือชาวบ้าน';
+  $('ins-role').textContent = iAmMaster
+    ? 'คุณคือมาสเตอร์ · ตอบได้แค่ ใช่ / ไม่ใช่ / ไม่เกี่ยว'
+    : r.youAreInsider
+      ? 'คุณคืออินไซเดอร์ · พาให้เขาทายถูกโดยไม่โดนจับ'
+      : 'ยังไม่รู้คำ ช่วยกันถามให้ออกก่อนหมดเวลา';
+
+  $('ins-master').textContent = iAmMaster
+    ? 'ทุกคนรู้แล้วว่าคุณคือมาสเตอร์'
+    : nameOf(r.masterId) + ' คือมาสเตอร์ ถามเขาได้เลย';
+
+  $('ins-found-card').style.display = iAmMaster ? 'block' : 'none';
+  if (iAmMaster) {
+    var grid = $('ins-found');
+    grid.innerHTML = '';
+    v.players.forEach(function (p) {
+      if (p.id === r.masterId) return;          // มาสเตอร์รู้คำอยู่แล้ว
+      var b = document.createElement('button');
+      b.className = 'pbtn';
+      b.appendChild(avEl(p.name, false, p.av));
+      var nm = document.createElement('span');
+      nm.textContent = p.name;
+      b.appendChild(nm);
+      b.onclick = function () {
+        ask(p.name + ' ทายคำถูกใช่ไหม? กดแล้วจะเข้าสู่ช่วงหาอินไซเดอร์ทันที', function () {
+          haptic('medium');
+          act('found', { code: CODE, targetId: p.id }).then(apply, fail);
+        });
+      };
+      grid.appendChild(b);
+    });
+  }
+
+  $('ins-hint').textContent = 'ถ้าหมดเวลาโดยไม่มีใครทายถูก แพ้กันทั้งวง รวมอินไซเดอร์ด้วย';
+  mainButton(null);
+}
+
+function insSecret(open) {
+  $('ins-secret').classList.toggle('open', open);
+}
+
+/** โหวตรอบแรก — คนที่ทายคำถูกคืออินไซเดอร์หรือเปล่า ใช้จอโหวตร่วมกับ Spyfall */
+function renderInsiderVote(v) {
+  show('vote');
+  backButton(null);
+  var vote = v.vote;
+  var isTarget = !vote.youMayVote;
+  var done = vote.youVoted || isTarget;
+
+  var av = $('vote-av');
+  av.innerHTML = '';
+  av.appendChild(avOf(vote.targetId, true));
+
+  $('vote-title').textContent = isTarget
+    ? 'คุณคือคนที่ทายคำถูก'
+    : nameOf(vote.targetId) + ' ทายคำถูก';
+  $('vote-sub').textContent = isTarget
+    ? 'ตอนนี้ทุกคนกำลังตัดสินว่าคุณคืออินไซเดอร์หรือเปล่า'
+    : done ? 'โหวตแล้ว รอคนอื่นให้ครบ'
+           : 'เขาคืออินไซเดอร์ไหม? ต้องเห็นด้วย ' + vote.need + ' จาก ' + vote.eligible +
+             ' เสียง · ไม่ถึงเกณฑ์แล้วจะได้ชี้ตัวกันต่อ';
+
+  $('btn-vote-yes').textContent = 'ใช่ เขาคืออินไซเดอร์';
+  $('btn-vote-yes').style.display = done ? 'none' : 'block';
+  $('btn-vote-no').style.display = done ? 'none' : 'block';
+  $('vote-progress').textContent = 'โหวตแล้ว ' + vote.voted + '/' + vote.eligible + ' คน';
+  mainButton(done ? null : 'ใช่ เขาคืออินไซเดอร์', function () { castVote(true); });
+}
+
+/** ชี้ตัวอินไซเดอร์ — เสียงมากสุดชนะ ไม่ต้องเกินครึ่ง */
+function renderHunt(v) {
+  show('hunt');
+  backButton(null);
+  mainButton(null);
+  var h = v.hunt;
+  var done = !!h.yours;
+
+  $('hunt-title').textContent = 'หาตัวอินไซเดอร์';
+  $('hunt-sub').textContent = done
+    ? 'เลือก ' + nameOf(h.yours) + ' แล้ว รอคนอื่นให้ครบ'
+    : 'เสียงมากที่สุดถูกกล่าวหา ไม่ต้องเกินครึ่ง · ' +
+      nameOf(v.round.masterId) + ' กับ ' + nameOf(v.round.guesserId) + ' เปิดไพ่ไปแล้ว จึงไม่อยู่ในตัวเลือก';
+  $('hunt-label').textContent = 'เลือกคนที่คุณคิดว่าเป็นอินไซเดอร์';
+
+  var grid = $('hunt-grid');
+  grid.innerHTML = '';
+  h.targets.forEach(function (id) {
+    var p = playerById(id);
+    var b = document.createElement('button');
+    b.className = 'pbtn' + (h.yours === id ? ' picked' : '');
+    b.appendChild(avEl(p ? p.name : nameOf(id), false, p ? p.av : 0));
+    var nm = document.createElement('span');
+    nm.textContent = p ? p.name : nameOf(id);
+    b.appendChild(nm);
+    b.disabled = done;
+    b.onclick = function () {
+      ask('ชี้ ' + (p ? p.name : nameOf(id)) + ' ว่าเป็นอินไซเดอร์?', function () {
+        haptic('medium');
+        act('hunt', { code: CODE, targetId: id }).then(apply, fail);
+      });
+    };
+    grid.appendChild(b);
+  });
+  $('hunt-progress').textContent = 'ชี้แล้ว ' + h.voted + '/' + h.eligible + ' คน';
+}
+
+/** คะแนนเสมอ — คนที่ทายคำถูกเป็นผู้ตัดสิน ใช้จอเดียวกับการชี้ตัว */
+function renderTiebreak(v) {
+  show('hunt');
+  backButton(null);
+  mainButton(null);
+  var t = v.tie;
+
+  $('hunt-title').textContent = 'คะแนนเสมอกัน';
+  $('hunt-sub').textContent = t.youDecide
+    ? 'คุณคือคนที่ทายคำถูก คุณเป็นคนตัดสินว่าจะเอาใคร'
+    : nameOf(t.deciderId) + ' เป็นคนตัดสิน เพราะเขาคือคนที่ทายคำถูก';
+  $('hunt-label').textContent = t.youDecide ? 'เลือกหนึ่งคน' : 'ผู้เข้าชิง';
+
+  var grid = $('hunt-grid');
+  grid.innerHTML = '';
+  t.candidates.forEach(function (id) {
+    var p = playerById(id);
+    var b = document.createElement('button');
+    b.className = 'pbtn';
+    b.appendChild(avEl(p ? p.name : nameOf(id), false, p ? p.av : 0));
+    var nm = document.createElement('span');
+    nm.textContent = p ? p.name : nameOf(id);
+    b.appendChild(nm);
+    b.disabled = !t.youDecide;
+    b.onclick = function () {
+      ask('ตัดสินว่า ' + (p ? p.name : nameOf(id)) + ' คืออินไซเดอร์?', function () {
+        haptic('heavy');
+        act('tiebreak', { code: CODE, targetId: id }).then(apply, fail);
+      });
+    };
+    grid.appendChild(b);
+  });
+  $('hunt-progress').textContent = t.youDecide
+    ? 'ไม่ตัดสินทันเวลา อินไซเดอร์จะรอดไป'
+    : 'รอ ' + nameOf(t.deciderId) + ' ตัดสิน';
+}
+
+/* ================= Undercover ================= */
+
+/** รอบคำใบ้ — คำของตัวเอง ลำดับพูด แล้วโหวตคัดออก */
+function renderClue(v) {
+  show('clue');
+  backButton(null);
+  mainButton(null);
+  var r = v.round;
+  var vote = v.vote;
+
+  if (secretRound !== v.roundNo) { secretRound = v.roundNo; clueSecret(false); }
+
+  $('clue-word').textContent = r.word;
+  $('clue-turn').textContent = 'รอบที่ ' + r.turn;
+
+  setNotice($('clue-notice'), r.lastOut
+    ? nameOf(r.lastOut.id) + ' ถูกคัดออก' +
+      (r.lastOut.byTie ? ' (คะแนนเสมอ จับสลาก)' : '') + ' — ' +
+      (r.lastOut.wasUnder ? 'เขาคือสายลับ!' : 'เขาเป็นชาวบ้าน')
+    : '');
+
+  var ol = $('clue-order');
+  ol.innerHTML = '';
+  r.order.forEach(function (id, i) {
+    var p = playerById(id);
+    var li = document.createElement('li');
+    var no = document.createElement('span');
+    no.className = 'ord';
+    no.textContent = (i + 1);
+    li.appendChild(no);
+    li.appendChild(avEl(p ? p.name : nameOf(id), false, p ? p.av : 0));
+    var nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = p ? p.name : nameOf(id);
+    li.appendChild(nm);
+    if (id === v.you) li.appendChild(tagEl('คุณ', 'you'));
+    ol.appendChild(li);
+  });
+
+  $('clue-vote-card').style.display = r.youAreOut ? 'none' : 'block';
+  var grid = $('clue-grid');
+  grid.innerHTML = '';
+  if (!r.youAreOut) {
+    r.order.forEach(function (id) {
+      if (id === v.you) return;                  // โหวตตัวเองไม่ได้
+      var p = playerById(id);
+      var b = document.createElement('button');
+      b.className = 'pbtn' + (vote.yours === id ? ' picked' : '');
+      b.appendChild(avEl(p ? p.name : nameOf(id), false, p ? p.av : 0));
+      var nm = document.createElement('span');
+      nm.textContent = p ? p.name : nameOf(id);
+      b.appendChild(nm);
+      b.disabled = !!vote.yours;
+      b.onclick = function () {
+        ask('โหวตคัด ' + (p ? p.name : nameOf(id)) + ' ออก?', function () {
+          haptic('medium');
+          // ส่งเลขรอบไปด้วย ถ้ารอบปิดไปพอดีตอนกด เซิร์ฟเวอร์จะปฏิเสธแทนที่จะเอาไปนับในรอบใหม่
+          act('vote', { code: CODE, targetId: id, turn: r.turn }).then(apply, fail);
+        });
+      };
+      grid.appendChild(b);
+    });
+  }
+  $('clue-hint').textContent = vote.yours
+    ? 'โหวต ' + nameOf(vote.yours) + ' ไปแล้ว เปลี่ยนไม่ได้'
+    : 'พูดคำใบ้ให้ครบทุกคนก่อน แล้วค่อยโหวต · เสมอกันจะจับสลาก';
+
+  $('clue-progress').textContent = r.youAreOut
+    ? 'คุณถูกคัดออกแล้ว ดูอย่างเดียวจนจบรอบ'
+    : 'โหวตแล้ว ' + vote.voted + '/' + vote.eligible + ' คน · เหลือในเกม ' + r.alive + ' คน';
+}
+
+function clueSecret(open) {
+  $('clue-secret').classList.toggle('open', open);
 }
 
 /** เข้ามากลางเกม — เห็นแค่ว่าใครเล่นอยู่ ไม่เห็นความลับอะไรทั้งนั้น */
@@ -704,12 +1070,17 @@ function renderWaiting(v) {
   mainButton(ready ? 'เริ่มรอบต่อไป' : null, startRound);
 }
 
-function renderResult(v) {
-  show('result');
-  backButton(null);
-  var res = v.result;
+/* ---------- ผลรอบ ----------
+ *
+ * โครงจอเหมือนกันทุกเกม ต่างกันแค่ข้อความ ป้ายข้างชื่อ และใครชนะ
+ * แต่ละเกมคืน { side, title, sub, tag, iWon }
+ *   side  'players' = ฝ่ายคนเยอะชนะ · 'spy' = ฝ่ายที่ซ่อนอยู่ชนะ · 'none' = ไม่มีใครชนะ
+ *   iWon  ผู้เล่นคนนี้ชนะไหม ใช้เลือกเสียง ไม่ใช่ดูจากฝั่งอย่างเดียว
+ *         เพราะสายลับที่รอดต้องได้ยินเสียงชนะ ทั้งที่ "ผู้เล่น" แพ้
+ */
+
+function spyfallResult(v, res) {
   var spy = nameOf(res.spyId);
-  // ฝั่งไหนชนะ ใช้บอกสีและสัญลักษณ์ ไม่ใช้ emoji
   var t = {
     spy_caught:       ['players', 'ผู้เล่นชนะ', 'จับสายลับได้ และ ' + spy +
                        (res.guess ? ' ทายแก้ตัวผิด (ทาย ' + res.guess + ')' : ' ทายแก้ตัวไม่ทัน') +
@@ -726,11 +1097,88 @@ function renderResult(v) {
     spy_no_guess:     ['players', 'ผู้เล่นชนะ', spy + ' เปิดตัวเองแล้วทายไม่ทัน — สถานที่คือ ' + res.location]
   }[res.type] || ['none', 'จบรอบ', ''];
 
+  var iAmSpy = (res.spyId === v.you);
+  return {
+    side: t[0], title: t[1], sub: t[2],
+    iWon: (t[0] !== 'players') === iAmSpy,
+    tag: function (p) { return p.id === res.spyId ? [['สายลับ', 'spy']] : []; }
+  };
+}
+
+function insiderResult(v, res) {
+  var ins = nameOf(res.insiderId);
+  var guesser = nameOf(res.guesserId);
+  var tail = ' · คำคือ ' + res.word;
+  var t;
+
+  if (res.type === 'no_answer') {
+    t = ['none', 'แพ้กันทั้งวง', 'หมดเวลาโดยไม่มีใครทายคำถูก — อินไซเดอร์คือ ' + ins + tail];
+  } else if (res.type === 'insider_caught') {
+    t = ['players', 'ชาวบ้านชนะ', {
+      vote1:    'โหวตรอบแรกเกินครึ่ง และ ' + guesser + ' คืออินไซเดอร์จริง' + tail,
+      hunt:     'ชี้ตัวถูก อินไซเดอร์คือ ' + ins + tail,
+      tiebreak: 'คะแนนเสมอ แล้ว ' + guesser + ' ตัดสินถูก อินไซเดอร์คือ ' + ins + tail
+    }[res.by] || ('จับอินไซเดอร์ได้ — ' + ins + tail)];
+  } else {
+    t = ['spy', 'อินไซเดอร์ชนะ', {
+      vote1:           'โหวตเกินครึ่งแต่กล่าวหาผิดคน ' + guesser + ' เป็นชาวบ้าน — อินไซเดอร์คือ ' + ins + tail,
+      guesser_slipped: guesser + ' ทายคำถูกและเป็นอินไซเดอร์จริง แต่เสียงโหวตไม่ถึงเกินครึ่ง เลยรอดไป' + tail,
+      hunt:            'ชี้ตัวผิด อินไซเดอร์คือ ' + ins + tail,
+      tiebreak:        'คะแนนเสมอ แล้ว ' + guesser + ' ตัดสินผิด อินไซเดอร์คือ ' + ins + tail,
+      tie_timeout:     'คะแนนเสมอแต่ ' + guesser + ' ตัดสินไม่ทัน อินไซเดอร์คือ ' + ins + tail,
+      no_hunt:         'ไม่มีใครชี้ตัวเลย อินไซเดอร์คือ ' + ins + tail
+    }[res.by] || ('จับอินไซเดอร์ไม่ได้ — ' + ins + tail)];
+  }
+
+  var iAmInsider = (res.insiderId === v.you);
+  return {
+    side: t[0], title: t[1], sub: t[2],
+    iWon: res.type === 'insider_caught' ? !iAmInsider
+        : res.type === 'insider_escaped' ? iAmInsider
+        : false,                               // ไม่มีใครทายคำได้ = แพ้กันหมด
+    tag: function (p) {
+      var out = [];
+      if (p.id === res.masterId) out.push(['มาสเตอร์', 'host']);
+      if (p.id === res.insiderId) out.push(['อินไซเดอร์', 'spy']);
+      if (p.id === res.guesserId) out.push(['ทายคำถูก', 'you']);
+      return out;
+    }
+  };
+}
+
+function undercoverResult(v, res) {
+  var names = res.underIds.map(nameOf).join(' และ ');
+  var tail = ' · ชาวบ้าน "' + res.civWord + '" · สายลับ "' + res.underWord + '"';
+  var t = res.type === 'civ_win'
+    ? ['players', 'ชาวบ้านชนะ', 'คัดสายลับออกได้หมด — สายลับคือ ' + names + tail]
+    : ['spy', 'สายลับชนะ', (res.by === 'no_vote'
+        ? 'ไม่มีใครโหวตเลยจนหมดเวลา สายลับเลยรอด — '
+        : 'เหลือคนน้อยจนสายลับไล่ทันชาวบ้าน — ') + 'สายลับคือ ' + names + tail];
+
+  var iAmUnder = res.underIds.indexOf(v.you) >= 0;
+  return {
+    side: t[0], title: t[1], sub: t[2],
+    iWon: (res.type === 'civ_win') !== iAmUnder,
+    tag: function (p) {
+      var out = [];
+      if (res.underIds.indexOf(p.id) >= 0) out.push(['สายลับ', 'spy']);
+      if (res.out.indexOf(p.id) >= 0) out.push(['ถูกคัดออก', 'out']);
+      return out;
+    }
+  };
+}
+
+function renderResult(v) {
+  show('result');
+  backButton(null);
+  var res = v.result;
+  var t = ui(v).result(v, res);
+
   var badge = $('result-emoji');
-  badge.className = 'verdict-badge ' + t[0];
-  badge.textContent = t[0] === 'players' ? '✓' : t[0] === 'spy' ? '✕' : '–';
-  $('result-title').textContent = t[1];
-  $('result-sub').textContent = t[2];
+  badge.className = 'verdict-badge ' + t.side;
+  badge.textContent = t.side === 'players' ? '\u2713' : t.side === 'spy' ? '\u2715' : '\u2013';
+  $('result-title').textContent = t.title;
+  $('result-sub').textContent = t.sub;
 
   var ul = $('result-scores');
   ul.innerHTML = '';
@@ -741,7 +1189,7 @@ function renderResult(v) {
     nm.className = 'nm';
     nm.textContent = p.name;
     li.appendChild(nm);
-    if (p.id === res.spyId) li.appendChild(tagEl('สายลับ', 'spy'));
+    t.tag(p).forEach(function (pair) { li.appendChild(tagEl(pair[0], pair[1])); });
     if (res.gained[p.id]) {
       var g = document.createElement('span');
       g.className = 'gain';
@@ -755,13 +1203,10 @@ function renderResult(v) {
     ul.appendChild(li);
   });
 
-  // เสียงแพ้ชนะ ครั้งเดียวต่อรอบ และตัดสินจากมุมของผู้เล่นคนนี้เอง
-  // สายลับที่รอดต้องได้ยินเสียงชนะ ทั้งที่ "ผู้เล่น" แพ้
+  // เสียงแพ้ชนะ ครั้งเดียวต่อรอบ ตัดสินจากมุมของผู้เล่นคนนี้เอง
   if (soundedRound !== v.roundNo) {
     soundedRound = v.roundNo;
-    var spyWon = (t[0] !== 'players');   // ใช้คำตัดสินเดียวกับตราผล ไม่เก็บรายชื่อผลไว้สองที่
-    var iAmSpy = (res.spyId === v.you);
-    if (spyWon === iAmSpy) winSound(); else loseSound();
+    if (t.iWon) winSound(); else loseSound();
   }
 
   var label = 'เริ่มรอบที่ ' + (v.roundNo + 1);
@@ -809,19 +1254,18 @@ var jitter = Math.random() * 1500;   // เหลื่อมเวลาระ�
 
 setInterval(function () {
   if (!VIEW) return;
-  if (VIEW.phase === 'dealing' && VIEW.deal) {
-    paintClock($('deal-timer'), $('deal-bar'), VIEW.deal.endsAt, 30000, 10);
-  } else if (VIEW.phase === 'playing' && VIEW.round) {
-    var left = paintClock($('timer'), $('timer-bar'), VIEW.round.endsAt, VIEW.minutes * 60000, 60);
-    // เตือนครั้งเดียวต่อรอบ ตอนเข้าสู่นาทีสุดท้าย
-    if (left <= 60 && left > 0 && warnedRound !== VIEW.roundNo) {
-      warnedRound = VIEW.roundNo;
-      lastMinuteWarning();
-    }
-  } else if (VIEW.phase === 'vote' && VIEW.vote) {
-    paintClock($('vote-timer'), $('vote-bar'), VIEW.vote.endsAt, 60000, 10);
-  } else if (VIEW.phase === 'guessing' && VIEW.guess) {
-    paintClock($('guess-timer'), $('guess-bar'), VIEW.guess.endsAt, 60000, 10);
+  // แต่ละเกมบอกเองว่าเฟสนี้ต้องจับเวลาอะไรไปแสดงที่ไหน [elId, barId, endsAt, total, warnSec]
+  var c = ui(VIEW).clock(VIEW);
+  if (!c) return;
+  var left = paintClock($(c[0]), $(c[1]), c[2], c[3], c[4]);
+
+  // เตือนนาทีสุดท้ายเฉพาะช่วงเล่นยาว ๆ ไม่ใช่หน้าต่างตัดสินใจสั้น ๆ
+  // Undercover มีหลายรอบในหนึ่งเกม จึงนับแยกรายรอบคำใบ้ด้วย
+  if (c[4] < 60) return;
+  var key = VIEW.roundNo + ':' + ((VIEW.round && VIEW.round.turn) || 0);
+  if (left <= 60 && left > 0 && warnedRound !== key) {
+    warnedRound = key;
+    lastMinuteWarning();
   }
 }, 250);
 
@@ -879,6 +1323,56 @@ function buildAvPicker() {
   }
 }
 
+/* ---------- ตัวเลือกเกมบนหน้าแรก ----------
+ * มีผลตอนสร้างห้องใหม่เท่านั้น การเข้าร่วมห้องใช้เกมของห้องนั้นเสมอ
+ */
+
+function buildGamePicker() {
+  var box = $('game-picker');
+  box.innerHTML = '';
+  GAMES.forEach(function (g) {
+    var b = document.createElement('button');
+    b.className = 'game-chip' + (g.id === MY_GAME ? '' : ' off');
+    var nm = document.createElement('span');
+    nm.className = 'g-name';
+    nm.textContent = g.short || g.name;
+    var sub = document.createElement('span');
+    sub.className = 'g-min';
+    sub.textContent = g.min + '–' + g.max + ' คน';
+    b.appendChild(nm);
+    b.appendChild(sub);
+    b.onclick = function () {
+      haptic();
+      MY_GAME = g.id;
+      try { localStorage.setItem('sf_game', g.id); } catch (e) {}
+      buildGamePicker();
+      paintHomeGame();
+      syncHomeButton();
+    };
+    box.appendChild(b);
+  });
+}
+
+/** ชื่อ คำโปรย และวิธีเล่นบนหน้าแรก เปลี่ยนตามเกมที่เลือก */
+function paintHomeGame() {
+  var g = metaOf(MY_GAME);
+  var u = GAME_UI[MY_GAME] || GAME_UI.spyfall;
+  $('wordmark').innerHTML = '';
+  $('wordmark').appendChild(document.createTextNode(u.wordmark[0]));
+  var em = document.createElement('span');
+  em.textContent = u.wordmark[1];
+  $('wordmark').appendChild(em);
+  $('tagline').textContent = g.tagline;
+
+  var ol = $('home-rules');
+  ol.innerHTML = '';
+  u.rules.forEach(function (html) {
+    var li = document.createElement('li');
+    li.innerHTML = html;      // ข้อความคงที่ในไฟล์นี้เอง ไม่ได้มาจากผู้ใช้หรือเซิร์ฟเวอร์
+    ol.appendChild(li);
+  });
+}
+
 function myName() {
   var n = $('input-name').value.trim();
   if (!n) { toast('ใส่ชื่อก่อนนะ'); return null; }
@@ -890,7 +1384,7 @@ function myName() {
 function createRoom() {
   if (!myName()) return;
   haptic();
-  act('create', {}).then(enter, fail);
+  act('create', { game: MY_GAME }).then(enter, fail);
 }
 
 function joinRoom(code) {
@@ -909,7 +1403,8 @@ function castVote(yes) {
 /** ถามยืนยันก่อนเริ่มเสมอ เพราะระหว่างรอเริ่มมีคนเข้าออกห้องได้ กดพลาดแล้วตัดคนที่กำลังจะเข้า */
 function startRound() {
   var n = VIEW ? VIEW.players.length : 0;
-  ask('เริ่มเกมเลยไหม? ตอนนี้มี ' + n + ' คนในห้อง', function () {
+  var q = VIEW && VIEW.waiting ? VIEW.waiting.length : 0;
+  ask('เริ่ม' + metaOf(VIEW && VIEW.game).name + 'เลยไหม? ตอนนี้มี ' + (n + q) + ' คนในห้อง', function () {
     haptic('medium');
     act('start', { code: CODE }).then(apply, fail);
   });
@@ -943,7 +1438,7 @@ function syncHomeButton() {
 }
 
 function share() {
-  var text = 'มาเล่น Spyfall กัน! รหัสห้อง ' + CODE;
+  var text = 'มาเล่น ' + metaOf(VIEW && VIEW.game).name + ' กัน! รหัสห้อง ' + CODE;
   if (!INVITE) { toast(text); return; }
   var link = INVITE + '?startapp=' + CODE;
   var url = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text);
@@ -966,13 +1461,21 @@ $('secret').onclick = function () {
   haptic();
   showSecret(!$('secret').classList.contains('open'));
 };
+$('ins-secret').onclick = function () {
+  haptic();
+  insSecret(!$('ins-secret').classList.contains('open'));
+};
+$('clue-secret').onclick = function () {
+  haptic();
+  clueSecret(!$('clue-secret').classList.contains('open'));
+};
 $('btn-cancel-deal').onclick = function () {
   ask('ยกเลิกการแจกไพ่ กลับไปล็อบบี้?', function () {
     act('canceldeal', { code: CODE }).then(apply, fail);
   });
 };
 $('btn-leave').onclick = $('btn-leave-game').onclick = $('btn-leave-result').onclick =
-  $('btn-leave-wait').onclick = leaveRoom;
+  $('btn-leave-wait').onclick = $('btn-leave-ins').onclick = $('btn-leave-clue').onclick = leaveRoom;
 $('btn-wait-start').onclick = startRound;
 $('input-code').addEventListener('input', syncHomeButton);
 
@@ -1011,6 +1514,7 @@ if (API.indexOf('PASTE_') === 0) {
     MY_AV = parseInt(savedAv, 10) || 0;
   }
   buildAvPicker();
+  try { MY_GAME = localStorage.getItem('sf_game') || 'spyfall'; } catch (e) {}
 
   api('hello', {
     initData: (tg && tg.initData) || '',
@@ -1021,7 +1525,14 @@ if (API.indexOf('PASTE_') === 0) {
     if (!res || !res.ok) { fail(res && res.error); goHome(); return; }
     ME = res.me;
     LOCS = res.locations;
+    GAMES = res.games || [];
     INVITE = res.invite || '';
+    // เซิร์ฟเวอร์ไม่รู้จักเกมที่เคยเลือกไว้ (เช่นถูกถอดออก) ให้กลับไปเกมแรก
+    if (!GAMES.some(function (g) { return g.id === MY_GAME; })) {
+      MY_GAME = GAMES.length ? GAMES[0].id : 'spyfall';
+    }
+    buildGamePicker();
+    paintHomeGame();
     try { localStorage.setItem('sf_me', JSON.stringify({ uid: ME.uid, sig: ME.sig })); } catch (e) {}
     if (!$('input-name').value) $('input-name').value = ME.name;
 

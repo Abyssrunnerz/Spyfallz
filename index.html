@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Spyfall</title>
+<title>Board Game</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23111827'/><circle cx='16' cy='16' r='9' fill='none' stroke='%23ef4444' stroke-width='2.5'/><circle cx='16' cy='16' r='3' fill='%23ef4444'/></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=22">
+<link rel="stylesheet" href="./style.css?v=23">
 </head>
 <body>
 
@@ -22,9 +22,14 @@
       <circle cx="32" cy="32" r="6" class="dot"/>
       <path d="M32 1v10M32 53v10M1 32h10M53 32h10" class="ticks"/>
     </svg>
-    <h1 class="wordmark">SPY<span>FALL</span></h1>
-    <p class="tagline">ทุกคนรู้ว่าอยู่ที่ไหน ยกเว้นสายลับหนึ่งคน</p>
+    <h1 id="wordmark" class="wordmark">SPY<span>FALL</span></h1>
+    <p id="tagline" class="tagline">ทุกคนรู้ว่าอยู่ที่ไหน ยกเว้นสายลับหนึ่งคน</p>
   </header>
+
+  <div class="field">
+    <span>เลือกเกม <em>ใช้ตอนสร้างห้องใหม่</em></span>
+    <div id="game-picker" class="games"></div>
+  </div>
 
   <label class="field">
     <span>ชื่อของคุณ</span>
@@ -49,12 +54,7 @@
 
   <div class="card rules">
     <div class="card-title">เล่นยังไง</div>
-    <ol class="steps">
-      <li><b>3–12 คน</b> ทุกคนได้สถานที่และบทบาทเหมือนกัน ยกเว้นสายลับ 1 คนที่ไม่รู้อะไรเลย</li>
-      <li><b>ผลัดกันถาม</b> คำถามที่พิสูจน์ว่าอีกฝ่ายรู้จักสถานที่ แต่ไม่เฉลยให้สายลับ</li>
-      <li><b>กล่าวหา</b> ได้คนละ 1 ครั้งต่อรอบ ถ้าเห็นด้วยเกินครึ่งและจับถูกตัว ผู้กล่าวหาได้ 2 คนโหวตถูกได้ 1</li>
-      <li><b>สายลับ</b> เปิดตัวทายสถานที่ได้ก่อนถูกกล่าวหา ทายถูกได้ 2 คะแนน · รอดจนหมดเวลาได้ 1</li>
-    </ol>
+    <ol id="home-rules" class="steps"></ol>
   </div>
 </section>
 
@@ -66,6 +66,7 @@
     <button id="btn-share" class="btn btn-outline btn-sm">ชวนเพื่อน</button>
   </div>
 
+  <div id="lobby-game" class="gamebar"></div>
   <div id="lobby-notice" class="notice"></div>
 
   <div class="card">
@@ -178,6 +179,95 @@
   </div>
 </section>
 
+<!-- ---------- อินไซเดอร์ ถามตอบ ---------- -->
+<section id="screen-insider" class="screen">
+  <div class="clock">
+    <div id="ins-timer" class="clock-value">--:--</div>
+    <div class="bar"><div id="ins-bar" class="bar-fill"></div></div>
+  </div>
+
+  <button id="ins-secret" type="button" class="secret" aria-label="การ์ดของคุณ">
+    <div class="secret-inner">
+      <div class="secret-face secret-back">
+        <div class="secret-peek">แตะเพื่อดูการ์ดของคุณ</div>
+      </div>
+      <div id="ins-front" class="secret-face secret-front">
+        <div class="secret-label">การ์ดของคุณ</div>
+        <div id="ins-main" class="secret-main">—</div>
+        <div id="ins-role" class="secret-role"></div>
+      </div>
+    </div>
+  </button>
+
+  <p id="ins-master" class="hint"></p>
+
+  <div id="ins-found-card" class="card">
+    <div class="card-title">ใครทายคำถูก</div>
+    <div id="ins-found" class="grid"></div>
+    <p class="hint left">กดชื่อคนที่พูดคำนั้นออกมาถูกต้อง แล้วจะเข้าสู่ช่วงหาอินไซเดอร์</p>
+  </div>
+
+  <p id="ins-hint" class="hint"></p>
+  <button id="btn-leave-ins" class="btn btn-ghost btn-leave">ออกจากห้อง</button>
+</section>
+
+<!-- ---------- อินไซเดอร์ ชี้ตัว และตัดสินตอนเสมอ ---------- -->
+<section id="screen-hunt" class="screen">
+  <div class="clock">
+    <div id="hunt-timer" class="clock-value sm">--</div>
+    <div class="bar"><div id="hunt-bar" class="bar-fill"></div></div>
+  </div>
+
+  <div class="card unmask">
+    <h2 id="hunt-title" class="unmask-title">—</h2>
+    <p id="hunt-sub" class="unmask-sub"></p>
+  </div>
+
+  <div id="hunt-card" class="card">
+    <div id="hunt-label" class="card-title">เลือกคนที่คิดว่าเป็นอินไซเดอร์</div>
+    <div id="hunt-grid" class="grid"></div>
+  </div>
+
+  <p id="hunt-progress" class="hint"></p>
+</section>
+
+<!-- ---------- Undercover คำใบ้และโหวตคัดออก ---------- -->
+<section id="screen-clue" class="screen">
+  <div class="clock">
+    <div id="clue-timer" class="clock-value">--:--</div>
+    <div class="bar"><div id="clue-bar" class="bar-fill"></div></div>
+  </div>
+
+  <button id="clue-secret" type="button" class="secret" aria-label="คำของคุณ">
+    <div class="secret-inner">
+      <div class="secret-face secret-back">
+        <div class="secret-peek">แตะเพื่อดูคำของคุณ</div>
+      </div>
+      <div class="secret-face secret-front">
+        <div class="secret-label">คำของคุณ</div>
+        <div id="clue-word" class="secret-main">—</div>
+        <div class="secret-role">ห้ามพูดคำนี้ออกมาตรง ๆ</div>
+      </div>
+    </div>
+  </button>
+
+  <div id="clue-notice" class="notice"></div>
+
+  <div class="card">
+    <div class="card-title">ลำดับพูด <span id="clue-turn" class="badge"></span></div>
+    <ol id="clue-order" class="list order"></ol>
+  </div>
+
+  <div id="clue-vote-card" class="card">
+    <div class="card-title">โหวตคัดออก</div>
+    <div id="clue-grid" class="grid"></div>
+    <p id="clue-hint" class="hint left"></p>
+  </div>
+
+  <p id="clue-progress" class="hint"></p>
+  <button id="btn-leave-clue" class="btn btn-ghost btn-leave">ออกจากห้อง</button>
+</section>
+
 <!-- ---------- เข้ามากลางเกม นั่งรอรอบหน้า ---------- -->
 <section id="screen-wait" class="screen">
   <div class="code-panel">
@@ -229,6 +319,6 @@
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=22"></script>
+<script src="./app.js?v=23"></script>
 </body>
 </html>
