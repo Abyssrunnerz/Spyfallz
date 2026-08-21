@@ -59,7 +59,11 @@ body {
 
 .hint { color: var(--muted); font-size: 13px; text-align: center; margin: 12px 0 0; }
 .hint.left { text-align: left; margin-top: 12px; }
+/* ป้ายเล็กในหัวการ์ด — ไม่เอา uppercase ที่สืบมาจาก .card-title
+ * เพราะชื่อบทบาท "Mr. White" กลายเป็น "MR. WHITE" แล้วอ่านเหมือนตะโกน
+ * ป้ายอื่นเป็นภาษาไทยกับตัวเลข ไม่ได้รับผลจาก uppercase อยู่แล้ว */
 .badge {
+  text-transform: none;
   display: inline-block; font-size: 11px; font-weight: 700; color: var(--red-lt);
   background: var(--red-bg); border-radius: 9999px; padding: 2px 10px; vertical-align: middle;
 }
@@ -495,3 +499,21 @@ body::before {
 .card-front.master .where, .secret-front.is-master .secret-main { color: #fff; }
 .card-front.master .role, .secret-front.is-master .secret-role { color: rgba(255, 255, 255, .85); }
 .secret-front.is-master .secret-label { color: var(--gold); }
+
+/* ---------- ตั้งบทบาทในล็อบบี้ (เฉพาะ Undercover) ---------- */
+.setup-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.setup-row:last-of-type { margin-bottom: 0; }
+.setup-label {
+  flex: 0 0 68px; font-size: 12px; font-weight: 700; color: var(--muted);
+}
+.setup-row .chips { flex: 1; min-width: 0; }
+
+/* ช่องกรองคำตอนให้ Mr. White ทาย — 281 คำ ถ้าไม่มีตัวกรองจะหาไม่เจอ */
+#white-filter {
+  width: 100%; margin-bottom: 9px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--card-2); color: var(--text); font: inherit; font-size: 14px;
+}
+#white-filter::placeholder { color: var(--muted); }
+#white-list { max-height: 46vh; overflow-y: auto; }
+#white-list .loc { font-size: 14px; padding: 10px 15px; }

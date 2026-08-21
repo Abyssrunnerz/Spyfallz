@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="./style.css?v=24">
+<link rel="stylesheet" href="./style.css?v=25">
 </head>
 <body>
 
@@ -73,6 +73,13 @@
   <div class="card">
     <div class="card-title">เวลาต่อรอบ</div>
     <div id="minutes-row" class="chips"></div>
+  </div>
+
+  <div id="lobby-setup" class="card">
+    <div class="card-title">บทบาทในรอบหน้า <span id="setup-split" class="badge"></span></div>
+    <div class="setup-row"><span class="setup-label">สายลับ</span><div id="setup-unders" class="chips"></div></div>
+    <div class="setup-row"><span class="setup-label">Mr. White</span><div id="setup-whites" class="chips"></div></div>
+    <p id="setup-hint" class="hint left"></p>
   </div>
 
   <div class="card">
@@ -269,6 +276,26 @@
   <button id="btn-leave-clue" class="btn btn-ghost btn-leave">ออกจากห้อง</button>
 </section>
 
+<!-- ---------- Undercover: Mr. White ถูกคัดออกแล้วขอทายคำ ---------- -->
+<section id="screen-white" class="screen">
+  <div class="clock">
+    <div id="white-timer" class="clock-value sm">--</div>
+    <div class="bar"><div id="white-bar" class="bar-fill"></div></div>
+  </div>
+
+  <div class="card unmask">
+    <div id="white-av" class="unmask-av"></div>
+    <h2 id="white-title" class="unmask-title">—</h2>
+    <p id="white-sub" class="unmask-sub"></p>
+  </div>
+
+  <div id="white-pick" class="card">
+    <div class="card-title">เลือกคำของชาวบ้าน <span class="badge">ทายได้ครั้งเดียว</span></div>
+    <input id="white-filter" type="text" placeholder="พิมพ์เพื่อกรองคำ" autocomplete="off">
+    <div id="white-list" class="locs"></div>
+  </div>
+</section>
+
 <!-- ---------- เข้ามากลางเกม นั่งรอรอบหน้า ---------- -->
 <section id="screen-wait" class="screen">
   <div class="code-panel">
@@ -320,6 +347,6 @@
 <div id="netbar"></div>
 <div id="toast" class="toast"></div>
 
-<script src="./app.js?v=24"></script>
+<script src="./app.js?v=25"></script>
 </body>
 </html>

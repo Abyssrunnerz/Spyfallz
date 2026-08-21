@@ -21,6 +21,7 @@ var inTelegram = !!(tg && tg.platform && tg.platform !== 'unknown');
 
 var ME = null;      // {uid, name, sig}
 var LOCS = [];      // ชื่อสถานที่ทั้งหมด (ของ Spyfall)
+var WORDS = [];     // คลังคำของ Undercover — Mr. White ใช้เลือกตอนทาย
 var GAMES = [];     // รายชื่อเกมจากเซิร์ฟเวอร์ [{id,name,short,tagline,min,max}]
 var MY_GAME = 'spyfall';   // เกมที่จะใช้ตอนกดสร้างห้อง
 var INVITE = '';    // ลิงก์ฐานสำหรับชวนเพื่อน (t.me/<bot>/<app>)
@@ -156,7 +157,7 @@ function fail(err) { toast(String((err && err.message) || err)); }
 
 function show(name) {
   ['home', 'lobby', 'deal', 'game', 'vote', 'guess',
-   'insider', 'hunt', 'clue', 'wait', 'result'].forEach(function (s) {
+   'insider', 'hunt', 'clue', 'white', 'wait', 'result'].forEach(function (s) {
     $('screen-' + s).classList.toggle('active', s === name);
   });
   window.scrollTo(0, 0);
@@ -464,19 +465,25 @@ var GAME_UI = {
       '<b>4–12 คน</b> ทุกคนได้คำมาคนละคำ ชาวบ้านได้คำเดียวกันหมด สายลับได้คำที่คล้ายแต่ไม่เหมือน',
       '<b>ไม่มีใครรู้ว่าตัวเองเป็นฝ่ายไหน</b> ต้องฟังคำใบ้คนอื่นแล้วเดาเอาเองว่าคำของเราเป็นพวกมากหรือพวกน้อย',
       '<b>ผลัดกันพูดคำใบ้คนละคำ</b> ห้ามพูดคำของตัวเองตรง ๆ ห้ามพูดซ้ำคนอื่น แล้วโหวตคัดออกทีละคน',
-      '<b>ชาวบ้านชนะ</b> เมื่อคัดสายลับออกได้หมด คนละ 1 คะแนน · <b>สายลับชนะ</b> เมื่อเหลือเท่าชาวบ้าน ได้ 2'
+      '<b>ชาวบ้านชนะ</b> เมื่อคัดฝ่ายซ่อนออกได้หมด คนละ 1 · <b>ฝ่ายซ่อนชนะ</b> เมื่อเหลือเท่าชาวบ้าน ได้ 2',
+      '<b>Mr. White</b> (เปิดได้ในล็อบบี้) ไม่ได้คำเลย ถูกโหวตออกแล้วได้ทายคำชาวบ้าน 1 ครั้ง ทายถูกชนะทันทีคนเดียว'
     ],
     timeLabel: 'เวลาต่อรอบคำใบ้',
     dealFace: function (c) {
-      return { main: c.word, sub: 'ห้ามบอกใครว่าคำของคุณคืออะไร' };
+      // ไพ่เปล่า = Mr. White ซึ่งรู้ตัวอยู่แล้วโดยธรรมชาติ ไม่ใช่การรั่วข้อมูล
+      return c.word
+        ? { main: c.word, sub: 'ห้ามบอกใครว่าคำของคุณคืออะไร' }
+        : { cls: 'spy', main: 'คุณคือ Mr. White', sub: 'ไม่มีคำ ต้องเดาจากคำใบ้คนอื่นล้วน ๆ' };
     },
     render: function (v) {
       if (v.phase === 'clue' && v.round && v.vote) { renderClue(v); return true; }
+      if (v.phase === 'whiteguess' && v.white) { renderWhite(v); return true; }
       return false;
     },
     clock: function (v) {
       if (v.phase === 'dealing' && v.deal) return ['deal-timer', 'deal-bar', v.deal.endsAt, 30000, 10];
       if (v.phase === 'clue' && v.vote) return ['clue-timer', 'clue-bar', v.vote.endsAt, v.minutes * 60000, 60];
+      if (v.phase === 'whiteguess' && v.white) return ['white-timer', 'white-bar', v.white.endsAt, 60000, 10];
       return null;
     },
     result: undercoverResult
@@ -491,7 +498,7 @@ function ui(v) {
 /** ข้อมูลเกมจากเซิร์ฟเวอร์ (ชื่อ จำนวนคน) — ยังไม่ได้โหลดก็คืนค่าพอใช้ได้ */
 function metaOf(id) {
   for (var i = 0; i < GAMES.length; i++) if (GAMES[i].id === id) return GAMES[i];
-  return { id: id || 'spyfall', name: 'Spyfall', short: 'สายลับ', tagline: '', min: 3, max: 12 };
+  return { id: id || 'spyfall', name: 'Spyfall', tagline: '', min: 3, max: 12 };
 }
 
 /* ---------- วาดหน้าจอ ---------- */
@@ -555,6 +562,8 @@ function renderLobby(v) {
     row.appendChild(b);
   });
 
+  renderSetup(v);
+
   var few = v.players.length < g.min;
   var label = few ? 'ต้องมีอย่างน้อย ' + g.min + ' คน (ตอนนี้ ' + v.players.length + ')'
                   : (v.roundNo > 0 ? 'เริ่มรอบที่ ' + (v.roundNo + 1) : 'เริ่มเกม');
@@ -565,6 +574,64 @@ function renderLobby(v) {
   $('btn-start').disabled = few;
   $('btn-start').style.display = 'block';
   mainButton(label, startRound, few);
+}
+
+/**
+ * กล่องตั้งบทบาทในล็อบบี้ — มีเฉพาะ Undercover เกมอื่นไม่มีอะไรให้ตั้ง
+ *
+ * ตั้งได้แค่ "สายลับ" กับ "Mr. White" ส่วนชาวบ้านคือส่วนที่เหลือเสมอ
+ * ตั้งชาวบ้านตรง ๆ ไม่ได้ เพราะคนเข้าออกห้องได้ตลอด ตัวเลขจะขัดกันเองทันทีที่มีคนเข้ามา
+ *
+ * ตัวเลือกสูงสุดมาจาก v.setup.cap ที่เซิร์ฟเวอร์คำนวณจากกติกา (ชาวบ้านต้องมากกว่าฝ่ายซ่อน)
+ * ไม่ได้ตั้งเพดานเองที่ไคลเอนต์ จะได้ไม่มีปุ่มที่กดแล้วเริ่มเกมไม่ได้
+ */
+function renderSetup(v) {
+  var box = $('lobby-setup');
+  if (!v.setup) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+
+  var st = v.setup;
+  var isHost = (v.you === v.hostId);
+  var cap = st.cap;
+
+  $('setup-split').textContent = 'ชาวบ้าน ' + st.civs + ' · สายลับ ' + st.unders +
+    (st.whites ? ' · Mr. White ' + st.whites : '');
+
+  var send = function (unders, whites) {
+    haptic();
+    act('setup', { code: CODE, unders: unders, whites: whites }).then(apply, fail);
+  };
+
+  var row = function (el, values, chosen, label, onPick) {
+    el.innerHTML = '';
+    values.forEach(function (val) {
+      var b = document.createElement('button');
+      b.className = 'loc' + (val === chosen ? '' : ' off');
+      b.textContent = label(val);
+      b.disabled = !isHost;
+      b.onclick = function () { onPick(val); };
+      el.appendChild(b);
+    });
+  };
+
+  // สายลับ: อัตโนมัติ หรือเลือกจำนวนเอง 1..(เพดาน - Mr. White ที่ตั้งไว้)
+  var uMax = Math.max(1, cap - st.whites);
+  var uVals = [null];
+  for (var i = 1; i <= uMax; i++) uVals.push(i);
+  row($('setup-unders'), uVals, st.auto ? null : st.unders,
+    function (x) { return x === null ? 'อัตโนมัติ' : String(x); },
+    function (x) { send(x, st.whites); });
+
+  // Mr. White: 0..(เพดาน - สายลับที่กำลังจะแจก)
+  var wMax = Math.max(0, cap - st.unders);
+  var wVals = [];
+  for (var j = 0; j <= wMax; j++) wVals.push(j);
+  row($('setup-whites'), wVals, st.whites, String,
+    function (x) { send(st.auto ? null : st.unders, x); });
+
+  $('setup-hint').textContent = isHost
+    ? 'ชาวบ้านคือส่วนที่เหลือ ปรับได้เฉพาะตอนอยู่ในล็อบบี้'
+    : 'หัวห้องเป็นคนตั้ง';
 }
 
 /** เฟสแจกไพ่ — ไพ่คว่ำเท่าจำนวนคน แตะได้ใบเดียว พลิกแล้วเปลี่ยนไม่ได้ */
@@ -956,13 +1023,19 @@ function renderClue(v) {
 
   if (secretRound !== v.roundNo) { secretRound = v.roundNo; clueSecret(false); }
 
-  $('clue-word').textContent = r.word;
+  // Mr. White ไม่มีคำ จอต้องบอกให้ชัดว่านั่นคือบทบาท ไม่ใช่ข้อมูลหาย
+  $('clue-word').textContent = r.word || 'ไม่มีคำ';
+  $('clue-word').parentNode.querySelector('.secret-role').textContent = r.word
+    ? 'ห้ามพูดคำนี้ออกมาตรง ๆ'
+    : 'คุณคือ Mr. White — เดาจากคำใบ้คนอื่นแล้วพูดให้เนียน';
   $('clue-turn').textContent = 'รอบที่ ' + r.turn;
 
+  var ROLE_TH = { under: 'เขาคือสายลับ!', white: 'เขาคือ Mr. White!', civ: 'เขาเป็นชาวบ้าน' };
   setNotice($('clue-notice'), r.lastOut
     ? nameOf(r.lastOut.id) + ' ถูกคัดออก' +
       (r.lastOut.byTie ? ' (คะแนนเสมอ จับสลาก)' : '') + ' — ' +
-      (r.lastOut.wasUnder ? 'เขาคือสายลับ!' : 'เขาเป็นชาวบ้าน')
+      (ROLE_TH[r.lastOut.role] || '') +
+      (r.lastOut.whiteGuess ? ' · เขาทายคำว่า "' + r.lastOut.whiteGuess + '" แต่ผิด' : '')
     : '');
 
   var ol = $('clue-order');
@@ -1013,11 +1086,60 @@ function renderClue(v) {
 
   $('clue-progress').textContent = r.youAreOut
     ? 'คุณถูกคัดออกแล้ว ดูอย่างเดียวจนจบรอบ'
-    : 'โหวตแล้ว ' + vote.voted + '/' + vote.eligible + ' คน · เหลือในเกม ' + r.alive + ' คน';
+    : 'โหวตแล้ว ' + vote.voted + '/' + vote.eligible + ' คน · เหลือในเกม ' + r.alive +
+      ' คน · ตามหา ' + r.unders + ' สายลับ' + (r.whites ? ' + ' + r.whites + ' Mr. White' : '');
 }
 
 function clueSecret(open) {
   $('clue-secret').classList.toggle('open', open);
+}
+
+/**
+ * Mr. White ถูกคัดออกแล้วขอทายคำของชาวบ้าน — ทุกคนเห็นจอนี้พร้อมกัน
+ * ตัวตนเขาเปิดไปแล้วตอนถูกคัดออก จึงไม่มีอะไรต้องปิดอีก
+ * ทายได้ครั้งเดียว ถูก = ชนะทันทีคนเดียว · ผิดหรือไม่ทัน = เกมเดินต่อ
+ */
+function renderWhite(v) {
+  show('white');
+  backButton(null);
+  mainButton(null);
+
+  var w = v.white;
+  var who = nameOf(w.id);
+  var av = $('white-av');
+  av.innerHTML = '';
+  av.appendChild(avOf(w.id, true));
+
+  $('white-title').textContent = w.youGuess ? 'คุณคือ Mr. White' : who + ' คือ Mr. White!';
+  $('white-sub').textContent = w.youGuess
+    ? 'โอกาสเดียว — ทายคำของชาวบ้านถูก คุณชนะทันทีคนเดียว ทั้งที่เพิ่งถูกโหวตออก'
+    : 'เขาถูกโหวตออกแล้วขอทายคำของชาวบ้าน ถ้าทายถูกเขาชนะทันที';
+
+  $('white-pick').style.display = w.youGuess ? 'block' : 'none';
+  if (w.youGuess) buildWhiteList();
+}
+
+/**
+ * รายการคำให้เลือก — คลังมีเกือบสามร้อยคำ ถ้าไม่มีช่องกรองจะหาไม่เจอในหกสิบวินาที
+ * กรองด้วยข้อความที่พิมพ์ ไม่ได้ส่งอะไรขึ้นเซิร์ฟเวอร์ ทุกอย่างอยู่ในเครื่อง
+ */
+function buildWhiteList(filter) {
+  var box = $('white-list');
+  var q = (filter === undefined ? $('white-filter').value : filter).trim();
+  box.innerHTML = '';
+  WORDS.forEach(function (name, i) {
+    if (q && name.indexOf(q) < 0) return;
+    var b = document.createElement('button');
+    b.className = 'loc';
+    b.textContent = name;
+    b.onclick = function () {
+      ask('ทายว่าคำของชาวบ้านคือ "' + name + '" ใช่ไหม? ทายได้ครั้งเดียว', function () {
+        haptic('heavy');
+        act('whiteguess', { code: CODE, wordIdx: i }).then(apply, fail);
+      });
+    };
+    box.appendChild(b);
+  });
 }
 
 /** เข้ามากลางเกม — เห็นแค่ว่าใครเล่นอยู่ ไม่เห็นความลับอะไรทั้งนั้น */
@@ -1144,21 +1266,37 @@ function insiderResult(v, res) {
 }
 
 function undercoverResult(v, res) {
-  var names = res.underIds.map(nameOf).join(' และ ');
+  var whites = res.whiteIds || [];
+  var hidden = res.underIds.concat(whites);
+  var who = function (ids) { return ids.map(nameOf).join(' และ '); };
   var tail = ' · ชาวบ้าน "' + res.civWord + '" · สายลับ "' + res.underWord + '"';
-  var t = res.type === 'civ_win'
-    ? ['players', 'ชาวบ้านชนะ', 'คัดสายลับออกได้หมด — สายลับคือ ' + names + tail]
-    : ['spy', 'สายลับชนะ', (res.by === 'no_vote'
-        ? 'ไม่มีใครโหวตเลยจนหมดเวลา สายลับเลยรอด — '
-        : 'เหลือคนน้อยจนสายลับไล่ทันชาวบ้าน — ') + 'สายลับคือ ' + names + tail];
+  var side = res.underIds.length
+    ? 'สายลับคือ ' + who(res.underIds) + (whites.length ? ' · Mr. White คือ ' + who(whites) : '')
+    : 'Mr. White คือ ' + who(whites);
 
-  var iAmUnder = res.underIds.indexOf(v.you) >= 0;
+  var t;
+  if (res.type === 'white_win') {
+    t = ['spy', 'Mr. White ชนะ',
+      who(whites) + ' ถูกโหวตออกแล้วทายคำของชาวบ้านถูก: "' + res.guess + '" — พลิกชนะคนเดียว' + tail];
+  } else if (res.type === 'civ_win') {
+    t = ['players', 'ชาวบ้านชนะ', 'คัดฝ่ายซ่อนออกได้หมด — ' + side + tail];
+  } else {
+    t = ['spy', 'ฝ่ายซ่อนชนะ', (res.by === 'no_vote'
+      ? 'ไม่มีใครโหวตเลยจนหมดเวลา ฝ่ายซ่อนเลยรอด — '
+      : 'เหลือคนน้อยจนฝ่ายซ่อนไล่ทันชาวบ้าน — ') + side + tail];
+  }
+
+  // ชนะของใครคิดจากมุมคนนี้เอง — white_win เป็นชัยชนะเดี่ยว พวกเดียวกันก็ไม่ได้ด้วย
+  var iWon = res.type === 'white_win' ? whites.indexOf(v.you) >= 0
+    : res.type === 'civ_win' ? hidden.indexOf(v.you) < 0
+    : hidden.indexOf(v.you) >= 0;
+
   return {
-    side: t[0], title: t[1], sub: t[2],
-    iWon: (res.type === 'civ_win') !== iAmUnder,
+    side: t[0], title: t[1], sub: t[2], iWon: iWon,
     tag: function (p) {
       var out = [];
       if (res.underIds.indexOf(p.id) >= 0) out.push(['สายลับ', 'spy']);
+      if (whites.indexOf(p.id) >= 0) out.push(['Mr. White', 'spy']);
       if (res.out.indexOf(p.id) >= 0) out.push(['ถูกคัดออก', 'out']);
       return out;
     }
@@ -1332,7 +1470,7 @@ function buildGamePicker() {
     b.className = 'game-chip' + (g.id === MY_GAME ? '' : ' off');
     var nm = document.createElement('span');
     nm.className = 'g-name';
-    nm.textContent = g.short || g.name;
+    nm.textContent = g.name;
     var sub = document.createElement('span');
     sub.className = 'g-min';
     sub.textContent = g.min + '–' + g.max + ' คน';
@@ -1477,6 +1615,7 @@ $('btn-leave').onclick = $('btn-leave-game').onclick = $('btn-leave-result').onc
   $('btn-leave-wait').onclick = $('btn-leave-ins').onclick = $('btn-leave-clue').onclick = leaveRoom;
 $('btn-wait-start').onclick = startRound;
 $('input-code').addEventListener('input', syncHomeButton);
+$('white-filter').addEventListener('input', function () { buildWhiteList(); });
 
 document.addEventListener('visibilitychange', function () {
   if (document.hidden || !CODE) return;
@@ -1524,6 +1663,7 @@ if (API.indexOf('PASTE_') === 0) {
     if (!res || !res.ok) { fail(res && res.error); goHome(); return; }
     ME = res.me;
     LOCS = res.locations;
+    WORDS = res.words || [];
     GAMES = res.games || [];
     INVITE = res.invite || '';
     // เซิร์ฟเวอร์ไม่รู้จักเกมที่เคยเลือกไว้ (เช่นถูกถอดออก) ให้กลับไปเกมแรก
